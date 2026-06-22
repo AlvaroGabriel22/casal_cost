@@ -1,0 +1,306 @@
+// CasalCost — PostgreSQL + Prisma (spec DB-001–DB-012, ME-001, indexes IDX-*)
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum CoupleStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+}
+
+enum IncomeType {
+  SALARY
+  BONUS
+  PLR
+  VACATION
+  BENEFIT
+  EXTRA_INCOME
+  OTHER
+}
+
+enum ExpenseScope {
+  INDIVIDUAL
+  SHARED
+}
+
+enum ExpenseType {
+  ONE_TIME
+  FIXED
+  RECURRING
+  INSTALLMENT
+  FUTURE_CREDIT_CARD
+}
+
+enum PaymentMethod {
+  BOLETO
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+  CASH
+  TRANSFER
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum SplitType {
+  EQUAL
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum RecurrenceFrequency {
+  MONTHLY
+  WEEKLY
+  YEARLY
+}
+
+model User {
+  id           String    @id @default(uuid()) @db.Uuid
+  name         String
+  username     String    @unique
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  financialSettings    FinancialSettings?
+  incomes              Income[]
+  ownedExpenses        Expense[]                 @relation("OwnerExpenses")
+  paidExpenses         Expense[]                 @relation("PaidExpenses")
+  couplesAsA           Couple[]                  @relation("UserA")
+  couplesAsB           Couple[]                  @relation("UserB")
+  accessOwned          IndividualAccountAccess[] @relation("AccessOwner")
+  accessAllowed        IndividualAccountAccess[] @relation("AccessAllowed")
+  auditLogs            AuditLog[]
+  expenseOccurrences   ExpenseOccurrence[]
+  occurrencePayments   ExpenseOccurrencePayment[]
+  sharedSplits         SharedExpenseSplit[]
+  installmentGroups    InstallmentGroup[]
+}
+
+model Couple {
+  id        String       @id @default(uuid()) @db.Uuid
+  userAId   String       @db.Uuid
+  userBId   String       @db.Uuid
+  status    CoupleStatus
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  userA User @relation("UserA", fields: [userAId], references: [id])
+  userB User @relation("UserB", fields: [userBId], references: [id])
+
+  expenses           Expense[]
+  expenseOccurrences ExpenseOccurrence[]
+  installmentGroups  InstallmentGroup[]
+
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model IndividualAccountAccess {
+  id            String   @id @default(uuid()) @db.Uuid
+  ownerUserId   String   @db.Uuid
+  allowedUserId String   @db.Uuid
+  canView       Boolean  @default(false)
+  canEdit       Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  owner   User @relation("AccessOwner", fields: [ownerUserId], references: [id])
+  allowed User @relation("AccessAllowed", fields: [allowedUserId], references: [id])
+
+  @@unique([ownerUserId, allowedUserId])
+  @@index([ownerUserId])
+  @@index([allowedUserId])
+}
+
+model FinancialSettings {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @unique @db.Uuid
+  baseSalary       Decimal  @db.Decimal(12, 2)
+  salaryPaymentDay Int
+  defaultCurrency  String   @default("BRL")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Income {
+  id                  String      @id @default(uuid()) @db.Uuid
+  userId              String      @db.Uuid
+  type                IncomeType
+  description         String?
+  amount              Decimal     @db.Decimal(12, 2)
+  referenceMonth      DateTime    @db.Date
+  receivedDate        DateTime?
+  isRecurring         Boolean     @default(false)
+  recurrenceStartDate DateTime?   @db.Date
+  recurrenceEndDate   DateTime?   @db.Date
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  deletedAt           DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([referenceMonth])
+  @@index([userId, referenceMonth])
+}
+
+model InstallmentGroup {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String?  @db.Uuid
+  coupleId            String?  @db.Uuid
+  title               String
+  totalAmount         Decimal  @db.Decimal(12, 2)
+  totalInstallments   Int
+  firstReferenceMonth DateTime @db.Date
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user   User?   @relation(fields: [userId], references: [id])
+  couple Couple? @relation(fields: [coupleId], references: [id])
+  expenses Expense[]
+}
+
+model Expense {
+  id                String        @id @default(uuid()) @db.Uuid
+  ownerUserId       String?       @db.Uuid
+  coupleId          String?       @db.Uuid
+  scope             ExpenseScope
+  title             String
+  description       String?
+  category          String
+  totalAmount       Decimal       @db.Decimal(12, 2)
+  expenseType       ExpenseType
+  paymentMethod     PaymentMethod
+  cardName          String?
+  paidByUserId      String?       @db.Uuid
+  status            ExpenseStatus @default(PENDING)
+  installmentGroupId String?      @db.Uuid
+  createdAt         DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  owner            User?             @relation("OwnerExpenses", fields: [ownerUserId], references: [id])
+  paidBy           User?             @relation("PaidExpenses", fields: [paidByUserId], references: [id])
+  couple           Couple?           @relation(fields: [coupleId], references: [id])
+  installmentGroup InstallmentGroup? @relation(fields: [installmentGroupId], references: [id])
+  occurrences      ExpenseOccurrence[]
+  recurrenceRule   RecurrenceRule?
+  sharedSplits     SharedExpenseSplit[]
+
+  @@index([ownerUserId])
+  @@index([paidByUserId])
+  @@index([coupleId])
+  @@index([scope])
+  @@index([ownerUserId, scope])
+  @@index([coupleId, scope])
+}
+
+model RecurrenceRule {
+  id           String               @id @default(uuid()) @db.Uuid
+  expenseId    String               @unique @db.Uuid
+  frequency    RecurrenceFrequency
+  startDate    DateTime             @db.Date
+  endDate      DateTime?            @db.Date
+  dayOfMonth   Int?
+  createdAt    DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+}
+
+model ExpenseOccurrence {
+  id                String        @id @default(uuid()) @db.Uuid
+  expenseId         String        @db.Uuid
+  userId            String        @db.Uuid
+  coupleId          String?       @db.Uuid
+  referenceMonth    DateTime      @db.Date
+  dueDate           DateTime      @db.Date
+  amount            Decimal       @db.Decimal(12, 2)
+  status            ExpenseStatus
+  paymentDate       DateTime?
+  installmentNumber Int?
+  totalInstallments Int?
+  comment           String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+  couple  Couple? @relation(fields: [coupleId], references: [id])
+  userPayments ExpenseOccurrencePayment[]
+
+  @@unique([expenseId, referenceMonth])
+  @@index([referenceMonth])
+  @@index([userId])
+  @@index([coupleId])
+  @@index([status])
+  @@index([userId, referenceMonth])
+  @@index([coupleId, referenceMonth])
+}
+
+model ExpenseOccurrencePayment {
+  id           String        @id @default(uuid()) @db.Uuid
+  occurrenceId String        @db.Uuid
+  userId       String        @db.Uuid
+  status       ExpenseStatus @default(PENDING)
+  paymentDate  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  occurrence ExpenseOccurrence @relation(fields: [occurrenceId], references: [id], onDelete: Cascade)
+  user       User              @relation(fields: [userId], references: [id])
+
+  @@unique([occurrenceId, userId])
+  @@index([userId])
+  @@index([status])
+}
+
+model SharedExpenseSplit {
+  id          String    @id @default(uuid()) @db.Uuid
+  expenseId   String    @db.Uuid
+  userId      String    @db.Uuid
+  splitType   SplitType
+  percentage  Decimal?  @db.Decimal(5, 2)
+  fixedAmount Decimal?  @db.Decimal(12, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  expense Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([expenseId, userId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String?  @db.Uuid
+  entity    String
+  entityId  String
+  action    String
+  oldValue  Json?
+  newValue  Json?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}

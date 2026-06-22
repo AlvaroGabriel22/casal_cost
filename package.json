@@ -1,0 +1,9 @@
+{
+  "name": "casalcost",
+  "private": true,
+  "scripts": {
+    "vercel-build": "npm run vercel:backend && npm run vercel:frontend",
+    "vercel:backend": "cd backend && npx prisma generate && node ../scripts/run-prisma-migrate-deploy.js && npm run build",
+    "vercel:frontend": "cd frontend && npm run build"
+  }
+}

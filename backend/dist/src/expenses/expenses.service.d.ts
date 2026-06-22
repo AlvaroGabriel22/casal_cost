@@ -1,0 +1,30 @@
+import { PrismaService } from '../prisma/prisma.service';
+import { PermissionService } from '../permission/permission.service';
+import { OccurrenceGenerationService } from '../financial/occurrence-generation.service';
+import { AuditLogService } from '../audit/audit-log.service';
+import type { CreateExpenseDto, ConfirmPasswordDto, ExpensePaymentDto, PayMyShareDto, UpdateExpenseDto } from './dto/create-expense.dto';
+import type { ExpenseListQueryDto } from './dto/expense-query.dto';
+export declare class ExpensesService {
+    private readonly prisma;
+    private readonly permission;
+    private readonly occurrences;
+    private readonly audit;
+    constructor(prisma: PrismaService, permission: PermissionService, occurrences: OccurrenceGenerationService, audit: AuditLogService);
+    private monthStartFromYm;
+    private defaultYm;
+    private assertCoupleMember;
+    createIndividual(userId: string, dto: CreateExpenseDto): unknown;
+    createShared(userId: string, dto: CreateExpenseDto): unknown;
+    list(userId: string, query: ExpenseListQueryDto): unknown;
+    listShared(userId: string, query: ExpenseListQueryDto): unknown;
+    getOne(userId: string, id: string): unknown;
+    updateOne(userId: string, id: string, dto: UpdateExpenseDto): unknown;
+    assertPassword(userId: string, password?: string): any;
+    softDelete(userId: string, id: string, dto?: ConfirmPasswordDto): unknown;
+    private monthStartFromMaybeDate;
+    private syncExpenseStatus;
+    private occurrenceWhereForAction;
+    pay(userId: string, id: string, dto?: ExpensePaymentDto): unknown;
+    payMyShare(userId: string, id: string, dto: PayMyShareDto): unknown;
+    cancel(userId: string, id: string, dto?: ExpensePaymentDto): unknown;
+}

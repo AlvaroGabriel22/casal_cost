@@ -1,0 +1,144 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.OccurrenceGenerationService = void 0;
+const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
+const prisma_service_1 = require("../prisma/prisma.service");
+let OccurrenceGenerationService = class OccurrenceGenerationService {
+    constructor(prisma) {
+        this.prisma = prisma;
+    }
+    monthAt(y, monthIndex0) {
+        return new Date(Date.UTC(y, monthIndex0, 1));
+    }
+    async ensureMonthlyOccurrence(params) {
+        const y = params.referenceMonth.getUTCFullYear();
+        const m = params.referenceMonth.getUTCMonth();
+        const ref = this.monthAt(y, m);
+        const exists = await this.prisma.expenseOccurrence.findUnique({
+            where: {
+                expenseId_referenceMonth: {
+                    expenseId: params.expenseId,
+                    referenceMonth: ref,
+                },
+            },
+        });
+        if (exists) {
+            throw new common_1.BadRequestException('Duplicate occurrence for this expense and month.');
+        }
+        const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+        const day = Math.min(params.dueDay, lastDay);
+        const dueDate = new Date(Date.UTC(y, m, day));
+        await this.prisma.expenseOccurrence.create({
+            data: {
+                expenseId: params.expenseId,
+                userId: params.userId,
+                coupleId: params.coupleId,
+                referenceMonth: ref,
+                dueDate,
+                amount: new client_1.Prisma.Decimal(params.amount),
+                status: client_1.ExpenseStatus.PENDING,
+            },
+        });
+    }
+    async generateInstallmentOccurrences(params) {
+        const dueDay = params.dueDay ?? 10;
+        const y0 = params.firstReferenceMonth.getUTCFullYear();
+        const m0 = params.firstReferenceMonth.getUTCMonth();
+        for (let i = 0; i < params.totalInstallments; i++) {
+            const ref = this.monthAt(y0, m0 + i);
+            await this.prisma.expenseOccurrence.create({
+                data: {
+                    expenseId: params.expenseId,
+                    userId: params.userId,
+                    coupleId: params.coupleId,
+                    referenceMonth: ref,
+                    dueDate: (() => {
+                        const ly = ref.getUTCFullYear();
+                        const lm = ref.getUTCMonth();
+                        const lastDay = new Date(Date.UTC(ly, lm + 1, 0)).getUTCDate();
+                        const day = Math.min(dueDay, lastDay);
+                        return new Date(Date.UTC(ly, lm, day));
+                    })(),
+                    amount: params.installmentAmount,
+                    status: client_1.ExpenseStatus.PENDING,
+                    installmentNumber: i + 1,
+                    totalInstallments: params.totalInstallments,
+                },
+            });
+        }
+    }
+    async expandRecurringForMonth(expenseId, referenceMonth) {
+        const rule = await this.prisma.recurrenceRule.findUnique({
+            where: { expenseId },
+            include: { expense: true },
+        });
+        if (!rule || rule.frequency !== client_1.RecurrenceFrequency.MONTHLY)
+            return;
+        const start = rule.startDate;
+        const end = rule.endDate;
+        const m0 = this.atMonthStart(referenceMonth);
+        if (m0 < this.atMonthStart(start))
+            return;
+        if (end && m0 > this.atMonthEnd(end))
+            return;
+        const exists = await this.prisma.expenseOccurrence.findUnique({
+            where: {
+                expenseId_referenceMonth: { expenseId, referenceMonth: m0 },
+            },
+        });
+        if (exists)
+            return;
+        const day = rule.dayOfMonth ?? 1;
+        const y = m0.getUTCFullYear();
+        const mi = m0.getUTCMonth();
+        const lastDay = new Date(Date.UTC(y, mi + 1, 0)).getUTCDate();
+        const d = Math.min(day, lastDay);
+        const dueDate = new Date(Date.UTC(y, mi, d));
+        await this.prisma.expenseOccurrence.create({
+            data: {
+                expenseId,
+                userId: rule.expense.ownerUserId,
+                coupleId: rule.expense.coupleId,
+                referenceMonth: m0,
+                dueDate,
+                amount: rule.expense.totalAmount,
+                status: client_1.ExpenseStatus.PENDING,
+            },
+        });
+    }
+    atMonthStart(d) {
+        return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+    }
+    atMonthEnd(d) {
+        return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0));
+    }
+    async createOneTimeOccurrence(params) {
+        await this.prisma.expenseOccurrence.create({
+            data: {
+                expenseId: params.expenseId,
+                userId: params.userId,
+                coupleId: params.coupleId,
+                referenceMonth: params.referenceMonth,
+                dueDate: params.dueDate,
+                amount: params.amount,
+                status: client_1.ExpenseStatus.PENDING,
+            },
+        });
+    }
+};
+exports.OccurrenceGenerationService = OccurrenceGenerationService;
+exports.OccurrenceGenerationService = OccurrenceGenerationService = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+], OccurrenceGenerationService);
+//# sourceMappingURL=occurrence-generation.service.js.map
