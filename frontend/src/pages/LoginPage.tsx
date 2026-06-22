@@ -26,6 +26,7 @@ export function LoginPage() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const flashMessage = (location.state as { message?: string } | null)?.message ?? null;
   const {
     register,
     handleSubmit,
@@ -83,6 +84,11 @@ export function LoginPage() {
               {error}
             </p>
           )}
+          {flashMessage && (
+            <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800" role="status">
+              {flashMessage}
+            </p>
+          )}
           <Input
             label="Usuário ou email"
             autoComplete="username"
@@ -120,6 +126,11 @@ export function LoginPage() {
               </span>
             )}
           </label>
+          <p className="text-right text-sm">
+            <Link className="font-medium text-[#0B2D5C] underline" to="/forgot-password">
+              Esqueci minha senha
+            </Link>
+          </p>
           <Button type="submit" className="w-full" loading={isSubmitting}>
             Acessar painel
           </Button>

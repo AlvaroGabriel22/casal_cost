@@ -14,6 +14,8 @@ import { FinancialSettingsPage } from '../pages/FinancialSettingsPage';
 import { PermissionsPage } from '../pages/PermissionsPage';
 import { CouplePage } from '../pages/CouplePage';
 import { ProfilePage } from '../pages/ProfilePage';
+import { ForgotPasswordPage } from '../pages/ForgotPasswordPage';
+import { ResetPasswordPage } from '../pages/ResetPasswordPage';
 import { NotFoundPage } from '../pages/NotFoundPage';
 
 export function AppRoutes() {
@@ -22,6 +24,8 @@ export function AppRoutes() {
       <Route path="/" element={<Navigate to="/dashboard/individual" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard/individual" element={<IndividualDashboardPage />} />

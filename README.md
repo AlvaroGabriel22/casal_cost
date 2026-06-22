@@ -96,6 +96,9 @@ O projeto está configurado para **frontend estático + API Nest numa Serverless
 - **Variáveis de ambiente obrigatórias** no projeto Vercel (Production; opcionalmente Preview):
   - **`DATABASE_URL`** — PostgreSQL (ex.: [Neon](https://neon.tech) ou [Vercel Postgres](https://vercel.com/storage/postgres)). Sem isto, o build omite `prisma migrate deploy` e a API falha ao iniciar (Prisma liga no arranque).
   - **`JWT_SECRET`** — segredo forte para JWT (não uses valores por defeito em produção).
+- **`RESEND_API_KEY`** — chave da [Resend](https://resend.com) para enviar e-mails de recuperação de senha.
+- **`MAIL_FROM`** — remetente (ex.: `CasalCost <noreply@seudominio.com>`; em testes podes usar `onboarding@resend.dev`).
+- **`APP_URL`** — URL pública do frontend (ex.: `https://casalcost.vercel.app`) para links de reset no e-mail.
 - Depois de configurares **`DATABASE_URL`**, faz **redeploy** para aplicar migrações durante o build ([`scripts/run-prisma-migrate-deploy.js`](scripts/run-prisma-migrate-deploy.js)).
 - **Seed:** com a mesma `DATABASE_URL`: `cd backend && npx prisma db seed`.
 
@@ -116,6 +119,16 @@ O projeto está configurado para **frontend estático + API Nest numa Serverless
 ```bash
 cd backend && npm test
 ```
+
+## Recuperação de senha
+
+Fluxo por **link no e-mail** (válido 30 minutos):
+
+1. Login → **Esqueci minha senha** → informe o e-mail cadastrado.
+2. O backend envia um link via [Resend](https://resend.com) (ou regista o link nos logs em dev, se `RESEND_API_KEY` não estiver definida).
+3. O utilizador abre o link e define uma nova senha.
+
+Variáveis: `RESEND_API_KEY`, `MAIL_FROM`, `APP_URL` (ver `backend/.env.example`).
 
 ## Tech summary
 

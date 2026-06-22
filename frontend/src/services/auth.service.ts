@@ -29,4 +29,17 @@ export const authService = {
     const { data } = await api.get<ApiSuccess<User>>('/auth/me');
     return data.data;
   },
+
+  async forgotPassword(email: string) {
+    const { data } = await api.post<ApiSuccess<null>>('/auth/forgot-password', { email });
+    return data.message;
+  },
+
+  async resetPassword(token: string, password: string) {
+    const { data } = await api.post<ApiSuccess<null>>('/auth/reset-password', {
+      token,
+      password,
+    });
+    return data.message;
+  },
 };

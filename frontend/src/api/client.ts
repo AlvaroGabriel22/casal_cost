@@ -22,7 +22,7 @@ api.interceptors.request.use((config) => {
 
 function isAuthEndpoint(url?: string) {
   if (!url) return false;
-  return /\/auth\/(login|register)\b/.test(url);
+  return /\/auth\/(login|register|forgot-password|reset-password)\b/.test(url);
 }
 
 api.interceptors.response.use(
@@ -32,7 +32,7 @@ api.interceptors.response.use(
       const hadToken = !!localStorage.getItem('token');
       localStorage.removeItem('token');
       window.dispatchEvent(new Event('auth:unauthorized'));
-      if (hadToken && !/\/(login|register)\b/.test(window.location.pathname)) {
+      if (hadToken && !/\/(login|register|forgot-password|reset-password)\b/.test(window.location.pathname)) {
         window.location.assign('/login');
       }
     }
