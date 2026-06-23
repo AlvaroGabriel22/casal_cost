@@ -7,6 +7,7 @@ import { ExpensesService } from '../expenses/expenses.service';
 import type {
   CreateInstallmentDto,
   DeleteInstallmentDto,
+  PayInstallmentDto,
   UpdateInstallmentDto,
 } from './dto/installment.dto';
 import type { CreateExpenseDto } from '../expenses/dto/create-expense.dto';
@@ -255,28 +256,73 @@ export class InstallmentsService {
     });
   }
 
-  async pay(userId: string, id: string) {
+  async pay(userId: string, id: string, dto?: PayInstallmentDto) {
     const group = await this.findEditableGroup(userId, id);
     const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.expenseOccurrence.updateMany({
-        where: {
-          expense: { installmentGroupId: group.id },
-          deletedAt: null,
-          status: { not: ExpenseStatus.CANCELLED },
-        },
-        data: { status: ExpenseStatus.PAID, paymentDate: now },
-      }),
-      this.prisma.expense.updateMany({
-        where: { installmentGroupId: group.id, deletedAt: null },
-        data: { status: ExpenseStatus.PAID },
-      }),
-    ]);
+
+    const payableOccurrences = group.expenses.flatMap((expense) =>
+      expense.occurrences.filter(
+        (occurrence) =>
+          occurrence.deletedAt === null &&
+          occurrence.status !== ExpenseStatus.CANCELLED,
+      ),
+    );
+
+    let occurrenceIdsToPay: string[];
+    if (dto?.occurrenceIds?.length) {
+      const allowed = new Set(payableOccurrences.map((o) => o.id));
+      occurrenceIdsToPay = dto.occurrenceIds.filter((occId) => allowed.has(occId));
+      if (occurrenceIdsToPay.length === 0) {
+        throw new NotFoundException(
+          'Nenhuma parcela válida foi selecionada para quitação.',
+        );
+      }
+    } else {
+      occurrenceIdsToPay = payableOccurrences.map((o) => o.id);
+    }
+
+    await this.prisma.expenseOccurrence.updateMany({
+      where: { id: { in: occurrenceIdsToPay } },
+      data: { status: ExpenseStatus.PAID, paymentDate: now },
+    });
+
+    for (const expense of group.expenses) {
+      await this.syncExpenseStatus(expense.id);
+    }
+
     const updated = await this.prisma.installmentGroup.findUnique({
       where: { id },
-      include: { expenses: true },
+      include: {
+        expenses: {
+          include: {
+            occurrences: { where: { deletedAt: null } },
+            paidBy: { select: { id: true, name: true, username: true } },
+          },
+        },
+      },
     });
     return ok(updated, 'Operation completed successfully');
+  }
+
+  private async syncExpenseStatus(expenseId: string) {
+    const occurrences = await this.prisma.expenseOccurrence.findMany({
+      where: { expenseId, deletedAt: null },
+      select: { status: true },
+    });
+    if (occurrences.length === 0) return;
+
+    const nextStatus = occurrences.every(
+      (o) => o.status === ExpenseStatus.CANCELLED,
+    )
+      ? ExpenseStatus.CANCELLED
+      : occurrences.every((o) => o.status === ExpenseStatus.PAID)
+        ? ExpenseStatus.PAID
+        : ExpenseStatus.PENDING;
+
+    await this.prisma.expense.update({
+      where: { id: expenseId },
+      data: { status: nextStatus },
+    });
   }
 
   async remove(userId: string, id: string, dto: DeleteInstallmentDto) {

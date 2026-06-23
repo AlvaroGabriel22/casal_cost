@@ -201,8 +201,11 @@ export const installmentService = {
     return data.data;
   },
 
-  async pay(id: string) {
-    const { data } = await api.patch<ApiSuccess<InstallmentGroup>>(`/installments/${id}/pay`);
+  async pay(id: string, occurrenceIds?: string[]) {
+    const { data } = await api.patch<ApiSuccess<InstallmentGroup>>(
+      `/installments/${id}/pay`,
+      occurrenceIds?.length ? { occurrenceIds } : {},
+    );
     return data.data;
   },
 

@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsDateString,
   IsEnum,
   IsInt,
@@ -89,6 +91,14 @@ export class UpdateInstallmentDto {
   @IsInt()
   @Min(1)
   totalInstallments?: number;
+}
+
+export class PayInstallmentDto {
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsUUID('all', { each: true })
+  occurrenceIds?: string[];
 }
 
 export class DeleteInstallmentDto extends ConfirmPasswordDto {}

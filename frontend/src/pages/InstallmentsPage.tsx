@@ -13,8 +13,33 @@ import { coupleService, installmentService } from '../services/finance.service';
 import { brDate, label, money, monthToDate } from '../utils/format';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { formatAxiosError } from '../api/errors';
-import type { InstallmentGroup, PaymentMethod } from '../types/finance';
+import type { InstallmentGroup, Occurrence, PaymentMethod } from '../types/finance';
 import { CheckCircle2, Pencil, Save, Trash2 } from 'lucide-react';
+
+const occurrenceStatusBadge: Record<string, string> = {
+  PAID: 'bg-emerald-50 text-emerald-700',
+  OVERDUE: 'bg-red-50 text-red-700',
+  PENDING: 'bg-amber-50 text-amber-700',
+  CANCELLED: 'bg-slate-100 text-slate-500',
+};
+
+const occurrenceStatusLabel: Record<string, string> = {
+  PAID: 'Quitada',
+  OVERDUE: 'Atrasada',
+  PENDING: 'Pendente',
+  CANCELLED: 'Cancelada',
+};
+
+function collectOccurrences(group: InstallmentGroup): Occurrence[] {
+  return (group.expenses?.flatMap((expense) => expense.occurrences ?? []) ?? [])
+    .slice()
+    .sort((a, b) => {
+      const an = a.installmentNumber ?? 0;
+      const bn = b.installmentNumber ?? 0;
+      if (an !== bn) return an - bn;
+      return a.referenceMonth.localeCompare(b.referenceMonth);
+    });
+}
 
 const schema = z.object({
   title: z.string().min(2, 'Informe o título.'),
@@ -47,6 +72,9 @@ export function InstallmentsPage() {
   const [editing, setEditing] = useState<InstallmentGroup | null>(null);
   const [deleting, setDeleting] = useState<InstallmentGroup | null>(null);
   const [deletePassword, setDeletePassword] = useState('');
+  const [paying, setPaying] = useState<InstallmentGroup | null>(null);
+  const [selectedToPay, setSelectedToPay] = useState<Set<string>>(new Set());
+  const [savingPayment, setSavingPayment] = useState(false);
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -143,6 +171,36 @@ export function InstallmentsPage() {
       'Parcelamento atualizado.',
     );
     setEditing(null);
+  }
+
+  function openPay(group: InstallmentGroup) {
+    setPaying(group);
+    setSelectedToPay(new Set());
+  }
+
+  function toggleSelectToPay(occurrenceId: string) {
+    setSelectedToPay((prev) => {
+      const next = new Set(prev);
+      if (next.has(occurrenceId)) next.delete(occurrenceId);
+      else next.add(occurrenceId);
+      return next;
+    });
+  }
+
+  async function confirmPay() {
+    if (!paying || selectedToPay.size === 0) return;
+    setSavingPayment(true);
+    try {
+      await installmentService.pay(paying.id, [...selectedToPay]);
+      setToast({ message: 'Parcelas quitadas.', type: 'success' });
+      setPaying(null);
+      setSelectedToPay(new Set());
+      await reload();
+    } catch (err) {
+      setToast({ message: formatAxiosError(err, 'Não foi possível quitar as parcelas.'), type: 'error' });
+    } finally {
+      setSavingPayment(false);
+    }
   }
 
   async function confirmDelete() {
@@ -259,10 +317,7 @@ export function InstallmentsPage() {
                     tone="pay"
                     label="Quitar"
                     icon={<CheckCircle2 />}
-                    onClick={() =>
-                      window.confirm('Quitar todas as parcelas deste parcelamento?') &&
-                      void mutate(() => installmentService.pay(group.id), 'Parcelamento quitado.')
-                    }
+                    onClick={() => openPay(group)}
                   />
                   <ActionButton
                     type="button"
@@ -361,6 +416,95 @@ export function InstallmentsPage() {
             </Button>
           </div>
         </div>
+      </Modal>
+      <Modal open={!!paying} title="Quitar parcelas" onClose={() => setPaying(null)}>
+        {paying && (() => {
+          const occurrences = collectOccurrences(paying);
+          const selectable = occurrences.filter(
+            (o) => o.status !== 'PAID' && o.status !== 'CANCELLED',
+          );
+          const allSelectableChosen =
+            selectable.length > 0 && selectable.every((o) => selectedToPay.has(o.id));
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-slate-600">
+                  Selecione as parcelas que deseja quitar. As já quitadas aparecem marcadas.
+                </p>
+                {selectable.length > 0 && (
+                  <button
+                    type="button"
+                    className="shrink-0 text-sm font-semibold text-[#0B2D5C] underline"
+                    onClick={() =>
+                      setSelectedToPay(
+                        allSelectableChosen ? new Set() : new Set(selectable.map((o) => o.id)),
+                      )
+                    }
+                  >
+                    {allSelectableChosen ? 'Limpar seleção' : 'Selecionar pendentes'}
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
+                {occurrences.map((occurrence) => {
+                  const isPaid = occurrence.status === 'PAID';
+                  const isCancelled = occurrence.status === 'CANCELLED';
+                  const disabled = isPaid || isCancelled;
+                  const checked = isPaid || selectedToPay.has(occurrence.id);
+                  return (
+                    <label
+                      key={occurrence.id}
+                      className={`flex items-center gap-3 rounded-xl border p-3 text-sm ${
+                        disabled
+                          ? 'cursor-not-allowed border-slate-200 bg-slate-50'
+                          : 'cursor-pointer border-slate-200 hover:border-[#0B2D5C]/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 shrink-0 accent-[#071A3D]"
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={() => toggleSelectToPay(occurrence.id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-slate-900">
+                          Parcela {occurrence.installmentNumber ?? '—'}
+                          {occurrence.totalInstallments ? `/${occurrence.totalInstallments}` : ''}
+                          <span className="ml-2 font-normal text-slate-500">
+                            • venc. {brDate(occurrence.dueDate)}
+                          </span>
+                        </p>
+                        <p className="text-xs text-slate-500">{money(occurrence.amount)}</p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-1 text-xs font-semibold ${
+                          occurrenceStatusBadge[occurrence.status] ?? 'bg-slate-100 text-slate-500'
+                        }`}
+                      >
+                        {occurrenceStatusLabel[occurrence.status] ?? label(occurrence.status)}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setPaying(null)}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="button"
+                  loading={savingPayment}
+                  disabled={selectedToPay.size === 0}
+                  onClick={() => void confirmPay()}
+                >
+                  <Save className="h-4 w-4" />
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
       <Modal open={!!deleting} title="Confirmar exclusão" onClose={() => setDeleting(null)}>
         <form

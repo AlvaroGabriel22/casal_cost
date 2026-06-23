@@ -15,6 +15,7 @@ import { InstallmentsService } from './installments.service';
 import {
   CreateInstallmentDto,
   DeleteInstallmentDto,
+  PayInstallmentDto,
   UpdateInstallmentDto,
 } from './dto/installment.dto';
 
@@ -48,8 +49,12 @@ export class InstallmentsController {
   }
 
   @Patch(':id/pay')
-  pay(@CurrentUser() user: AuthUser, @Param('id') id: string) {
-    return this.installments.pay(user.id, id);
+  pay(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: PayInstallmentDto,
+  ) {
+    return this.installments.pay(user.id, id, dto);
   }
 
   @Delete(':id')
