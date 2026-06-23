@@ -236,10 +236,13 @@ export function InstallmentsPage() {
     setSavingCard(true);
     try {
       await cardService.upsert(dueDayPrompt.name.trim(), day);
-      setToast({ message: 'Cartão salvo.', type: 'success' });
+      setToast({
+        message: 'Cartão salvo. Vencimento aplicado às parcelas pendentes desse cartão.',
+        type: 'success',
+      });
       setDueDayPrompt(null);
       setNewCardName('');
-      await reloadCards();
+      await Promise.all([reloadCards(), reload()]);
     } catch (err) {
       setToast({ message: formatAxiosError(err, 'Não foi possível salvar o cartão.'), type: 'error' });
     } finally {

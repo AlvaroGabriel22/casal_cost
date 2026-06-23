@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ExpenseStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ok } from '../common/api-response';
 import { UpdateCardDto, UpsertCardDto } from './dto/card.dto';
@@ -23,6 +24,7 @@ export class CardsService {
       create: { userId, name, dueDay: dto.dueDay },
       update: { dueDay: dto.dueDay },
     });
+    await this.applyDueDayToExistingOccurrences(userId, name, dto.dueDay);
     return ok(card, 'Operation completed successfully');
   }
 
@@ -38,7 +40,50 @@ export class CardsService {
         dueDay: dto.dueDay ?? existing.dueDay,
       },
     });
+    await this.applyDueDayToExistingOccurrences(userId, card.name, card.dueDay);
     return ok(card, 'Operation completed successfully');
+  }
+
+  /**
+   * Recalculates the due date of every pending/overdue occurrence belonging to
+   * the user's expenses paid with the given card, keeping the reference month
+   * and only changing the day to the card's due day (clamped to month length).
+   */
+  private async applyDueDayToExistingOccurrences(
+    userId: string,
+    cardName: string,
+    dueDay: number,
+  ) {
+    const expenses = await this.prisma.expense.findMany({
+      where: { ownerUserId: userId, cardName, deletedAt: null },
+      select: { id: true },
+    });
+    if (expenses.length === 0) return;
+
+    const occurrences = await this.prisma.expenseOccurrence.findMany({
+      where: {
+        expenseId: { in: expenses.map((e) => e.id) },
+        deletedAt: null,
+        status: { in: [ExpenseStatus.PENDING, ExpenseStatus.OVERDUE] },
+      },
+      select: { id: true, referenceMonth: true },
+    });
+    if (occurrences.length === 0) return;
+
+    const updates = occurrences.map((occurrence) => {
+      const ref = occurrence.referenceMonth;
+      const year = ref.getUTCFullYear();
+      const month = ref.getUTCMonth();
+      const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      const day = Math.min(dueDay, lastDay);
+      const dueDate = new Date(Date.UTC(year, month, day));
+      return this.prisma.expenseOccurrence.update({
+        where: { id: occurrence.id },
+        data: { dueDate },
+      });
+    });
+
+    await this.prisma.$transaction(updates);
   }
 
   async remove(userId: string, id: string) {
