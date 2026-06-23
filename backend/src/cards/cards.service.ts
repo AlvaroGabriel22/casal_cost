@@ -45,9 +45,10 @@ export class CardsService {
   }
 
   /**
-   * Recalculates the due date of every pending/overdue occurrence belonging to
-   * the user's expenses paid with the given card, keeping the reference month
-   * and only changing the day to the card's due day (clamped to month length).
+   * Recalculates the due date of every active occurrence belonging to the
+   * user's expenses paid with the given card, keeping the reference month and
+   * only changing the day to the card's due day (clamped to month length).
+   * Cancelled occurrences are left untouched.
    */
   private async applyDueDayToExistingOccurrences(
     userId: string,
@@ -64,7 +65,7 @@ export class CardsService {
       where: {
         expenseId: { in: expenses.map((e) => e.id) },
         deletedAt: null,
-        status: { in: [ExpenseStatus.PENDING, ExpenseStatus.OVERDUE] },
+        status: { not: ExpenseStatus.CANCELLED },
       },
       select: { id: true, referenceMonth: true },
     });

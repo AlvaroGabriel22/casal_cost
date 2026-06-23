@@ -8,6 +8,7 @@ import {
   ExpenseScope,
   ExpenseStatus,
   ExpenseType,
+  PaymentMethod,
   Prisma,
   RecurrenceFrequency,
 } from '@prisma/client';
@@ -47,6 +48,50 @@ export class ExpensesService {
     return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}`;
   }
 
+  private dueDateFromMonth(referenceMonth: Date, dueDay: number): Date {
+    const y = referenceMonth.getUTCFullYear();
+    const m = referenceMonth.getUTCMonth();
+    const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const day = Math.min(dueDay, lastDay);
+    return new Date(Date.UTC(y, m, day));
+  }
+
+  /** Returns the registered due day for the user's card, if it applies. */
+  private async resolveCardDueDay(
+    userId: string,
+    paymentMethod: PaymentMethod,
+    cardName: string | null | undefined,
+  ): Promise<number | undefined> {
+    if (
+      !cardName ||
+      (paymentMethod !== PaymentMethod.CREDIT_CARD &&
+        paymentMethod !== PaymentMethod.DEBIT_CARD)
+    ) {
+      return undefined;
+    }
+    const card = await this.prisma.userCard.findUnique({
+      where: { userId_name: { userId, name: cardName } },
+    });
+    return card?.dueDay;
+  }
+
+  /**
+   * Resolves the due date for a card-based occurrence: when the card has a
+   * registered due day it wins (kept on the reference month); otherwise the
+   * provided fallback date is used.
+   */
+  private async resolveCardDueDate(
+    userId: string,
+    paymentMethod: PaymentMethod,
+    cardName: string | null | undefined,
+    referenceMonth: Date,
+    fallback: Date,
+  ): Promise<Date> {
+    const dueDay = await this.resolveCardDueDay(userId, paymentMethod, cardName);
+    if (dueDay === undefined) return fallback;
+    return this.dueDateFromMonth(referenceMonth, dueDay);
+  }
+
   private assertCoupleMember(
     couple: { partnerId: string },
     currentUserId: string,
@@ -65,7 +110,13 @@ export class ExpensesService {
     if (dto.expenseType === ExpenseType.ONE_TIME) {
       const ym = dto.referenceMonth ?? this.defaultYm();
       const ref = this.monthStartFromYm(ym);
-      const due = dto.dueDate ? new Date(dto.dueDate) : ref;
+      const due = await this.resolveCardDueDate(
+        userId,
+        dto.paymentMethod,
+        dto.cardName,
+        ref,
+        dto.dueDate ? new Date(dto.dueDate) : ref,
+      );
       const exp = await this.prisma.expense.create({
         data: {
           ownerUserId: userId,
@@ -112,6 +163,13 @@ export class ExpensesService {
       const start = new Date(dto.recurrence.startDate);
       const ym = dto.referenceMonth ?? this.defaultYm();
       const ref = this.monthStartFromYm(ym);
+      const cardDueDay = await this.resolveCardDueDay(
+        userId,
+        dto.paymentMethod,
+        dto.cardName,
+      );
+      const dayOfMonth =
+        cardDueDay ?? dto.recurrence.dayOfMonth ?? start.getUTCDate();
 
       const exp = await this.prisma.expense.create({
         data: {
@@ -133,7 +191,7 @@ export class ExpensesService {
               endDate: dto.recurrence.endDate
                 ? new Date(dto.recurrence.endDate)
                 : null,
-              dayOfMonth: dto.recurrence.dayOfMonth ?? start.getUTCDate(),
+              dayOfMonth,
             },
           },
         },
@@ -145,7 +203,7 @@ export class ExpensesService {
         coupleId: null,
         referenceMonth: ref,
         amount,
-        dueDay: dto.recurrence.dayOfMonth ?? ref.getUTCDate(),
+        dueDay: dayOfMonth,
       });
 
       await this.audit.log({
@@ -190,6 +248,11 @@ export class ExpensesService {
           installmentGroupId: ig.id,
         },
       });
+      const cardDueDay = await this.resolveCardDueDay(
+        userId,
+        dto.paymentMethod,
+        dto.cardName,
+      );
       await this.occurrences.generateInstallmentOccurrences({
         expenseId: exp.id,
         userId,
@@ -197,7 +260,7 @@ export class ExpensesService {
         installmentAmount: per,
         totalInstallments: n,
         firstReferenceMonth: first,
-        dueDay: dto.installment.dueDay,
+        dueDay: dto.installment.dueDay ?? cardDueDay,
       });
       await this.audit.log({
         userId,
@@ -212,7 +275,13 @@ export class ExpensesService {
     if (dto.expenseType === ExpenseType.FUTURE_CREDIT_CARD) {
       const ym = dto.referenceMonth ?? this.defaultYm();
       const ref = this.monthStartFromYm(ym);
-      const due = dto.dueDate ? new Date(dto.dueDate) : ref;
+      const due = await this.resolveCardDueDate(
+        userId,
+        dto.paymentMethod,
+        dto.cardName,
+        ref,
+        dto.dueDate ? new Date(dto.dueDate) : ref,
+      );
       const exp = await this.prisma.expense.create({
         data: {
           ownerUserId: userId,
@@ -260,7 +329,13 @@ export class ExpensesService {
     if (dto.expenseType === ExpenseType.ONE_TIME) {
       const ym = dto.referenceMonth ?? this.defaultYm();
       const ref = this.monthStartFromYm(ym);
-      const due = dto.dueDate ? new Date(dto.dueDate) : ref;
+      const due = await this.resolveCardDueDate(
+        userId,
+        dto.paymentMethod,
+        dto.cardName,
+        ref,
+        dto.dueDate ? new Date(dto.dueDate) : ref,
+      );
       const exp = await this.prisma.expense.create({
         data: {
           ownerUserId: userId,
@@ -305,6 +380,13 @@ export class ExpensesService {
       const start = new Date(dto.recurrence.startDate);
       const ym = dto.referenceMonth ?? this.defaultYm();
       const ref = this.monthStartFromYm(ym);
+      const cardDueDay = await this.resolveCardDueDay(
+        userId,
+        dto.paymentMethod,
+        dto.cardName,
+      );
+      const dayOfMonth =
+        cardDueDay ?? dto.recurrence.dayOfMonth ?? start.getUTCDate();
       const exp = await this.prisma.expense.create({
         data: {
           ownerUserId: userId,
@@ -326,7 +408,7 @@ export class ExpensesService {
               endDate: dto.recurrence.endDate
                 ? new Date(dto.recurrence.endDate)
                 : null,
-              dayOfMonth: dto.recurrence.dayOfMonth ?? start.getUTCDate(),
+              dayOfMonth,
             },
           },
         },
@@ -338,7 +420,7 @@ export class ExpensesService {
         coupleId: couple.coupleId,
         referenceMonth: ref,
         amount,
-        dueDay: dto.recurrence.dayOfMonth ?? ref.getUTCDate(),
+        dueDay: dayOfMonth,
       });
 
       await this.audit.log({
@@ -384,6 +466,11 @@ export class ExpensesService {
           installmentGroupId: ig.id,
         },
       });
+      const cardDueDay = await this.resolveCardDueDay(
+        userId,
+        dto.paymentMethod,
+        dto.cardName,
+      );
       await this.occurrences.generateInstallmentOccurrences({
         expenseId: exp.id,
         userId,
@@ -391,7 +478,7 @@ export class ExpensesService {
         installmentAmount: per,
         totalInstallments: n,
         firstReferenceMonth: first,
-        dueDay: dto.installment.dueDay,
+        dueDay: dto.installment.dueDay ?? cardDueDay,
       });
       await this.audit.log({
         userId,
@@ -406,7 +493,13 @@ export class ExpensesService {
     if (dto.expenseType === ExpenseType.FUTURE_CREDIT_CARD) {
       const ym = dto.referenceMonth ?? this.defaultYm();
       const ref = this.monthStartFromYm(ym);
-      const due = dto.dueDate ? new Date(dto.dueDate) : ref;
+      const due = await this.resolveCardDueDate(
+        userId,
+        dto.paymentMethod,
+        dto.cardName,
+        ref,
+        dto.dueDate ? new Date(dto.dueDate) : ref,
+      );
       const exp = await this.prisma.expense.create({
         data: {
           ownerUserId: userId,
