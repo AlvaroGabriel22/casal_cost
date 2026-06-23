@@ -1,10 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
@@ -12,7 +45,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ExpensesService = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
-const bcrypt = require("bcrypt");
+const bcrypt = __importStar(require("bcrypt"));
 const prisma_service_1 = require("../prisma/prisma.service");
 const api_response_1 = require("../common/api-response");
 const pagination_dto_1 = require("../common/dto/pagination.dto");
@@ -39,7 +72,7 @@ let ExpensesService = class ExpensesService {
         if (!userId)
             return;
         if (userId !== currentUserId && userId !== couple.partnerId) {
-            throw new common_1.BadRequestException('paidByUserId must belong to active couple');
+            throw new common_1.BadRequestException('Selecione um membro do casal ativo para registrar quem realizou o pagamento.');
         }
     }
     async createIndividual(userId, dto) {
@@ -84,10 +117,10 @@ let ExpensesService = class ExpensesService {
         if (dto.expenseType === client_1.ExpenseType.FIXED ||
             dto.expenseType === client_1.ExpenseType.RECURRING) {
             if (!dto.recurrence) {
-                throw new common_1.BadRequestException('recurrence is required');
+                throw new common_1.BadRequestException('Informe os dados de recorrência para esta despesa.');
             }
             if (dto.recurrence.frequency !== client_1.RecurrenceFrequency.MONTHLY) {
-                throw new common_1.BadRequestException('Only MONTHLY recurrence is supported in MVP');
+                throw new common_1.BadRequestException('No momento, apenas recorrência mensal é suportada.');
             }
             const start = new Date(dto.recurrence.startDate);
             const ym = dto.referenceMonth ?? this.defaultYm();
@@ -136,7 +169,7 @@ let ExpensesService = class ExpensesService {
         }
         if (dto.expenseType === client_1.ExpenseType.INSTALLMENT) {
             if (!dto.installment) {
-                throw new common_1.BadRequestException('installment metadata required');
+                throw new common_1.BadRequestException('Informe o número de parcelas e o mês inicial.');
             }
             const n = dto.installment.totalInstallments;
             const first = this.monthStartFromYm(dto.installment.firstReferenceMonth);
@@ -219,12 +252,12 @@ let ExpensesService = class ExpensesService {
             });
             return (0, api_response_1.ok)(exp, 'Operation completed successfully');
         }
-        throw new common_1.BadRequestException('Unsupported expense type');
+        throw new common_1.BadRequestException('Tipo de despesa não suportado.');
     }
     async createShared(userId, dto) {
         const couple = await this.permission.getActiveCoupleForUser(userId);
         if (!couple) {
-            throw new common_1.BadRequestException('No active couple');
+            throw new common_1.BadRequestException('Ative um casal antes de criar despesas compartilhadas.');
         }
         const amount = new client_1.Prisma.Decimal(dto.totalAmount);
         this.assertCoupleMember(couple, userId, dto.paidByUserId);
@@ -268,7 +301,7 @@ let ExpensesService = class ExpensesService {
         if (dto.expenseType === client_1.ExpenseType.FIXED ||
             dto.expenseType === client_1.ExpenseType.RECURRING) {
             if (!dto.recurrence) {
-                throw new common_1.BadRequestException('recurrence is required');
+                throw new common_1.BadRequestException('Informe os dados de recorrência para esta despesa.');
             }
             const start = new Date(dto.recurrence.startDate);
             const ym = dto.referenceMonth ?? this.defaultYm();
@@ -318,7 +351,7 @@ let ExpensesService = class ExpensesService {
         }
         if (dto.expenseType === client_1.ExpenseType.INSTALLMENT) {
             if (!dto.installment) {
-                throw new common_1.BadRequestException('installment metadata required');
+                throw new common_1.BadRequestException('Informe o número de parcelas e o mês inicial.');
             }
             const n = dto.installment.totalInstallments;
             const first = this.monthStartFromYm(dto.installment.firstReferenceMonth);
@@ -403,7 +436,7 @@ let ExpensesService = class ExpensesService {
             });
             return (0, api_response_1.ok)(exp, 'Operation completed successfully');
         }
-        throw new common_1.BadRequestException('Unsupported expense type');
+        throw new common_1.BadRequestException('Tipo de despesa não suportado.');
     }
     async list(userId, query) {
         const { skip, take, page, limit } = (0, pagination_dto_1.paginate)(query.page, query.limit);
@@ -510,7 +543,7 @@ let ExpensesService = class ExpensesService {
             },
         });
         if (!exp)
-            throw new common_1.NotFoundException('Expense not found');
+            throw new common_1.NotFoundException('Despesa não encontrada.');
         await this.permission.assertExpenseReadable(userId, exp);
         return (0, api_response_1.ok)(exp, 'Operation completed successfully');
     }
@@ -522,12 +555,12 @@ let ExpensesService = class ExpensesService {
             throw new common_1.NotFoundException();
         await this.permission.assertExpenseEditable(userId, exp);
         if (exp.status === client_1.ExpenseStatus.PAID) {
-            throw new common_1.BadRequestException('Cannot edit paid expense');
+            throw new common_1.BadRequestException('Não é possível editar uma despesa já quitada.');
         }
         if (dto.paidByUserId && exp.scope === client_1.ExpenseScope.SHARED) {
             const couple = await this.permission.getActiveCoupleForUser(userId);
             if (!couple || couple.coupleId !== exp.coupleId) {
-                throw new common_1.BadRequestException('No active couple');
+                throw new common_1.BadRequestException('Esta despesa não está vinculada a um casal ativo.');
             }
             this.assertCoupleMember(couple, userId, dto.paidByUserId);
         }
@@ -556,14 +589,14 @@ let ExpensesService = class ExpensesService {
     }
     async assertPassword(userId, password) {
         if (!password) {
-            throw new common_1.UnauthorizedException('Password confirmation required');
+            throw new common_1.UnauthorizedException('Confirme sua senha para concluir esta ação.');
         }
         const user = await this.prisma.user.findFirst({
             where: { id: userId, deletedAt: null },
             select: { passwordHash: true },
         });
         if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
-            throw new common_1.UnauthorizedException('Invalid password confirmation');
+            throw new common_1.UnauthorizedException('Senha incorreta. Verifique e tente novamente.');
         }
     }
     async softDelete(userId, id, dto) {
@@ -619,7 +652,7 @@ let ExpensesService = class ExpensesService {
                 where: { id: dto.occurrenceId, expenseId: id, deletedAt: null },
             });
             if (!occurrence)
-                throw new common_1.NotFoundException('Occurrence not found');
+                throw new common_1.NotFoundException('Lançamento mensal não encontrado.');
             return { id: occurrence.id };
         }
         if (dto?.referenceMonth) {
@@ -628,7 +661,7 @@ let ExpensesService = class ExpensesService {
                 where: { expenseId: id, referenceMonth, deletedAt: null },
             });
             if (!occurrence)
-                throw new common_1.NotFoundException('Occurrence not found');
+                throw new common_1.NotFoundException('Lançamento mensal não encontrado.');
             return { id: occurrence.id };
         }
         return {
@@ -674,7 +707,7 @@ let ExpensesService = class ExpensesService {
         if (!exp)
             throw new common_1.NotFoundException();
         if (exp.scope !== client_1.ExpenseScope.SHARED) {
-            throw new common_1.BadRequestException('Only shared expenses can use pay my share');
+            throw new common_1.BadRequestException('Esta opção é válida apenas para despesas compartilhadas.');
         }
         await this.permission.assertExpenseReadable(userId, exp);
         const where = await this.occurrenceWhereForAction(id, dto);
@@ -683,9 +716,9 @@ let ExpensesService = class ExpensesService {
             include: { expense: true },
         });
         if (!occurrence)
-            throw new common_1.NotFoundException('Occurrence not found');
+            throw new common_1.NotFoundException('Lançamento mensal não encontrado.');
         if (occurrence.status === client_1.ExpenseStatus.CANCELLED) {
-            throw new common_1.BadRequestException('Cannot pay a cancelled occurrence');
+            throw new common_1.BadRequestException('Este lançamento foi cancelado e não pode ser quitado.');
         }
         const now = new Date();
         const payment = await this.prisma.expenseOccurrencePayment.upsert({

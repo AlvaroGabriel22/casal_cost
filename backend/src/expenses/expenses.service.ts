@@ -197,6 +197,7 @@ export class ExpensesService {
         installmentAmount: per,
         totalInstallments: n,
         firstReferenceMonth: first,
+        dueDay: dto.installment.dueDay,
       });
       await this.audit.log({
         userId,
@@ -390,6 +391,7 @@ export class ExpensesService {
         installmentAmount: per,
         totalInstallments: n,
         firstReferenceMonth: first,
+        dueDay: dto.installment.dueDay,
       });
       await this.audit.log({
         userId,

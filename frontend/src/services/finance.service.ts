@@ -14,6 +14,7 @@ import type {
   InstallmentGroup,
   PaymentMethod,
   User,
+  UserCard,
 } from '../types/finance';
 
 export type ExpenseFilters = {
@@ -178,6 +179,7 @@ export const installmentService = {
     paidByUserId?: string;
     totalInstallments: number;
     firstReferenceMonth: string;
+    dueDay?: number;
     scope: ExpenseScope;
   }) {
     const { data } = await api.post<ApiSuccess<Expense>>('/installments', body);
@@ -213,6 +215,28 @@ export const installmentService = {
     const { data } = await api.delete<ApiSuccess<{ id: string }>>(`/installments/${id}`, {
       data: { password },
     });
+    return data.data;
+  },
+};
+
+export const cardService = {
+  async list() {
+    const { data } = await api.get<ApiSuccess<UserCard[]>>('/cards');
+    return data.data;
+  },
+
+  async upsert(name: string, dueDay: number) {
+    const { data } = await api.post<ApiSuccess<UserCard>>('/cards', { name, dueDay });
+    return data.data;
+  },
+
+  async update(id: string, body: { name?: string; dueDay?: number }) {
+    const { data } = await api.patch<ApiSuccess<UserCard>>(`/cards/${id}`, body);
+    return data.data;
+  },
+
+  async remove(id: string) {
+    const { data } = await api.delete<ApiSuccess<{ id: string }>>(`/cards/${id}`);
     return data.data;
   },
 };

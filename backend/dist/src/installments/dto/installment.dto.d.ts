@@ -22,5 +22,8 @@ export declare class UpdateInstallmentDto {
     paidByUserId?: string;
     totalInstallments?: number;
 }
+export declare class PayInstallmentDto {
+    occurrenceIds?: string[];
+}
 export declare class DeleteInstallmentDto extends ConfirmPasswordDto {
 }

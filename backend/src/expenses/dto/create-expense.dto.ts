@@ -44,6 +44,12 @@ class InstallmentMetaDto {
 
   @IsDateString()
   firstReferenceMonth: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  dueDay?: number;
 }
 
 export class CreateExpenseDto {

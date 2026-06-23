@@ -9,12 +9,12 @@ import { Input, Select } from '../components/ui/Field';
 import { Modal } from '../components/ui/Modal';
 import { EmptyState, ErrorState, Spinner } from '../components/ui/States';
 import { Toast } from '../components/ui/Toast';
-import { coupleService, installmentService } from '../services/finance.service';
+import { cardService, coupleService, installmentService } from '../services/finance.service';
 import { brDate, label, money, monthToDate } from '../utils/format';
 import { useAsyncData } from '../hooks/useAsyncData';
 import { formatAxiosError } from '../api/errors';
-import type { InstallmentGroup, Occurrence, PaymentMethod } from '../types/finance';
-import { CheckCircle2, Pencil, Save, Trash2 } from 'lucide-react';
+import type { InstallmentGroup, Occurrence, PaymentMethod, UserCard } from '../types/finance';
+import { CheckCircle2, CreditCard, Pencil, Plus, Save, Trash2 } from 'lucide-react';
 
 const occurrenceStatusBadge: Record<string, string> = {
   PAID: 'bg-emerald-50 text-emerald-700',
@@ -65,7 +65,7 @@ const schema = z.object({
 type FormInput = z.input<typeof schema>;
 type FormData = z.output<typeof schema>;
 const paymentMethods = ['BOLETO', 'PIX', 'CREDIT_CARD', 'DEBIT_CARD', 'CASH', 'TRANSFER', 'OTHER'] as const;
-const cardOptions = ['Nubank', 'Itaú', 'Bradesco', 'Santander', 'Banco do Brasil', 'Caixa', 'Inter', 'C6', 'PicPay', 'Outro'];
+const cardSuggestions = ['Nubank', 'Itaú', 'Bradesco', 'Santander', 'Banco do Brasil', 'Caixa', 'Inter', 'C6', 'PicPay'];
 
 export function InstallmentsPage() {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -75,6 +75,10 @@ export function InstallmentsPage() {
   const [paying, setPaying] = useState<InstallmentGroup | null>(null);
   const [selectedToPay, setSelectedToPay] = useState<Set<string>>(new Set());
   const [savingPayment, setSavingPayment] = useState(false);
+  const [cardManagerOpen, setCardManagerOpen] = useState(false);
+  const [newCardName, setNewCardName] = useState('');
+  const [dueDayPrompt, setDueDayPrompt] = useState<{ name: string; dueDay: string } | null>(null);
+  const [savingCard, setSavingCard] = useState(false);
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
@@ -87,6 +91,7 @@ export function InstallmentsPage() {
   });
   const { data, loading, error, reload } = useAsyncData(() => installmentService.list(), []);
   const { data: couple } = useAsyncData(() => coupleService.me(), []);
+  const { data: cards, reload: reloadCards } = useAsyncData(() => cardService.list(), []);
   const {
     register,
     handleSubmit,
@@ -108,10 +113,17 @@ export function InstallmentsPage() {
 
   async function onSubmit(values: FormData) {
     try {
+      const usesCard =
+        values.paymentMethod === 'CREDIT_CARD' || values.paymentMethod === 'DEBIT_CARD';
+      const selectedCard =
+        usesCard && values.cardName
+          ? cards?.find((card) => card.name === values.cardName)
+          : undefined;
       await installmentService.create({
         ...values,
         paidByUserId: values.scope === 'SHARED' ? values.paidByUserId : undefined,
         firstReferenceMonth: monthToDate(values.firstReferenceMonth),
+        dueDay: selectedCard?.dueDay,
       });
       setToast({ message: 'Parcelamento criado.', type: 'success' });
       reset({
@@ -203,6 +215,52 @@ export function InstallmentsPage() {
     }
   }
 
+  function openDueDayPrompt(name: string) {
+    const existing = cards?.find((card) => card.name === name);
+    setDueDayPrompt({ name, dueDay: existing ? String(existing.dueDay) : '' });
+  }
+
+  function startAddCustomCard() {
+    const name = newCardName.trim();
+    if (!name) return;
+    openDueDayPrompt(name);
+  }
+
+  async function confirmDueDay() {
+    if (!dueDayPrompt) return;
+    const day = Number(dueDayPrompt.dueDay);
+    if (!Number.isInteger(day) || day < 1 || day > 31) {
+      setToast({ message: 'Informe um dia de vencimento entre 1 e 31.', type: 'error' });
+      return;
+    }
+    setSavingCard(true);
+    try {
+      await cardService.upsert(dueDayPrompt.name.trim(), day);
+      setToast({ message: 'Cartão salvo.', type: 'success' });
+      setDueDayPrompt(null);
+      setNewCardName('');
+      await reloadCards();
+    } catch (err) {
+      setToast({ message: formatAxiosError(err, 'Não foi possível salvar o cartão.'), type: 'error' });
+    } finally {
+      setSavingCard(false);
+    }
+  }
+
+  async function removeCard(card: UserCard) {
+    await mutateCards(() => cardService.remove(card.id), 'Cartão removido.');
+  }
+
+  async function mutateCards(action: () => Promise<unknown>, success: string) {
+    try {
+      await action();
+      setToast({ message: success, type: 'success' });
+      await reloadCards();
+    } catch (err) {
+      setToast({ message: formatAxiosError(err, 'A ação falhou.'), type: 'error' });
+    }
+  }
+
   async function confirmDelete() {
     if (!deleting) return;
     await mutate(
@@ -245,14 +303,29 @@ export function InstallmentsPage() {
             ))}
           </Select>
           {(createPaymentMethod === 'CREDIT_CARD' || createPaymentMethod === 'DEBIT_CARD') && (
-            <Select label="Cartão usado" {...register('cardName')}>
-              <option value="">Selecione o cartão</option>
-              {cardOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
-              ))}
-            </Select>
+            <div className="space-y-2">
+              <Select label="Cartão usado" {...register('cardName')}>
+                <option value="">Selecione o cartão</option>
+                {(cards ?? []).map((card) => (
+                  <option key={card.id} value={card.name}>
+                    {card.name} (vence dia {card.dueDay})
+                  </option>
+                ))}
+              </Select>
+              <button
+                type="button"
+                onClick={() => setCardManagerOpen(true)}
+                className="inline-flex items-center gap-2 text-sm font-semibold text-[#0B2D5C] underline"
+              >
+                <CreditCard className="h-4 w-4" />
+                Gerenciar cartões
+              </button>
+              {!cards?.length && (
+                <p className="text-xs text-slate-500">
+                  Nenhum cartão cadastrado. Adicione um cartão para usar a data de vencimento automática.
+                </p>
+              )}
+            </div>
           )}
           <Button type="submit" loading={isSubmitting} className="w-full">
             Criar parcelamento
@@ -378,9 +451,13 @@ export function InstallmentsPage() {
               onChange={(e) => setEditForm({ ...editForm, cardName: e.target.value })}
             >
               <option value="">Selecione o cartão</option>
-              {cardOptions.map((item) => (
-                <option key={item} value={item}>
-                  {item}
+              {editForm.cardName &&
+                !cards?.some((card) => card.name === editForm.cardName) && (
+                  <option value={editForm.cardName}>{editForm.cardName}</option>
+                )}
+              {(cards ?? []).map((card) => (
+                <option key={card.id} value={card.name}>
+                  {card.name} (vence dia {card.dueDay})
                 </option>
               ))}
             </Select>
@@ -538,6 +615,126 @@ export function InstallmentsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+      <Modal open={cardManagerOpen} title="Gerenciar cartões" onClose={() => setCardManagerOpen(false)}>
+        <div className="space-y-5">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">Meus cartões</p>
+            {!cards?.length ? (
+              <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500">
+                Você ainda não cadastrou cartões.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {cards.map((card) => (
+                  <div
+                    key={card.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-900">{card.name}</p>
+                      <p className="text-xs text-slate-500">Vence dia {card.dueDay}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        onClick={() => openDueDayPrompt(card.name)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Vencimento
+                      </button>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1 rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                        onClick={() => void removeCard(card)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">Adicionar cartão</p>
+            <div className="flex flex-wrap gap-2">
+              {cardSuggestions
+                .filter((name) => !cards?.some((card) => card.name === name))
+                .map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:border-[#0B2D5C]/40 hover:bg-slate-50"
+                    onClick={() => openDueDayPrompt(name)}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {name}
+                  </button>
+                ))}
+            </div>
+            <div className="mt-3 flex items-end gap-2">
+              <div className="flex-1">
+                <Input
+                  label="Novo cartão"
+                  placeholder="Ex: Cartão da loja"
+                  value={newCardName}
+                  onChange={(e) => setNewCardName(e.target.value)}
+                />
+              </div>
+              <Button type="button" onClick={startAddCustomCard} disabled={!newCardName.trim()}>
+                <Plus className="h-4 w-4" />
+                Adicionar
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" onClick={() => setCardManagerOpen(false)}>
+              Fechar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+      <Modal
+        open={!!dueDayPrompt}
+        title="Data de vencimento do cartão"
+        onClose={() => setDueDayPrompt(null)}
+      >
+        {dueDayPrompt && (
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void confirmDueDay();
+            }}
+          >
+            <p className="text-sm text-slate-600">
+              Informe o dia do vencimento da fatura do cartão <strong>{dueDayPrompt.name}</strong>.
+              Essa data será usada automaticamente em novos parcelamentos com esse cartão.
+            </p>
+            <Input
+              label="Dia do vencimento (1 a 31) *"
+              type="number"
+              min={1}
+              max={31}
+              value={dueDayPrompt.dueDay}
+              onChange={(e) => setDueDayPrompt({ ...dueDayPrompt, dueDay: e.target.value })}
+            />
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="outline" onClick={() => setDueDayPrompt(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" loading={savingCard} disabled={!dueDayPrompt.dueDay}>
+                <Save className="h-4 w-4" />
+                Salvar
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
       <Toast message={toast?.message ?? null} type={toast?.type} />
     </div>

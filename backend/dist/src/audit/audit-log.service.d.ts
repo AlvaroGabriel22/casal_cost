@@ -9,5 +9,5 @@ export declare class AuditLogService {
         action: string;
         oldValue?: unknown;
         newValue?: unknown;
-    }): any;
+    }): Promise<void>;
 }

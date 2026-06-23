@@ -33,7 +33,7 @@ let OccurrenceGenerationService = class OccurrenceGenerationService {
             },
         });
         if (exists) {
-            throw new common_1.BadRequestException('Duplicate occurrence for this expense and month.');
+            throw new common_1.BadRequestException('Já existe um lançamento desta despesa para o mês informado.');
         }
         const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
         const day = Math.min(params.dueDay, lastDay);

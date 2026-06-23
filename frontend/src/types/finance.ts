@@ -191,3 +191,9 @@ export type InstallmentGroup = {
   firstReferenceMonth: string;
   expenses?: Expense[];
 };
+
+export type UserCard = {
+  id: string;
+  name: string;
+  dueDay: number;
+};

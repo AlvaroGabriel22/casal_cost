@@ -10,6 +10,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   Min,
 } from 'class-validator';
 import { ExpenseScope, ExpenseType, PaymentMethod } from '@prisma/client';
@@ -50,6 +51,13 @@ export class CreateInstallmentDto {
 
   @IsDateString()
   firstReferenceMonth: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  dueDay?: number;
 
   @IsEnum(ExpenseScope)
   scope: ExpenseScope;

@@ -23,7 +23,7 @@ Financial management for couples: individual privacy by default, optional partne
 
 ## Database
 
-Set `DATABASE_URL` in `backend/.env` (see `backend/.env.example`).
+Configure **`backend/.env`** (ficheiro único oficial do backend; não é versionado).
 
 **Opção A — Docker (recomendado para desenvolvimento)**  
 Instale o [Docker](https://docs.docker.com/engine/install/), depois na raiz do repositório:
@@ -44,9 +44,10 @@ createdb couple_finance_db
 
 ## Backend
 
+Crie ou edite **`backend/.env`** antes de arrancar (ver secção [Variáveis de ambiente (backend)](#variáveis-de-ambiente-backend)).
+
 ```bash
 cd backend
-cp .env.example .env   # edit DATABASE_URL and JWT_SECRET
 npm install
 npx prisma generate
 npx prisma migrate deploy
@@ -94,11 +95,12 @@ O projeto está configurado para **frontend estático + API Nest numa Serverless
 - **URL de produção:** https://casalcost.vercel.app
 - **CLI:** na raiz do repositório, `npx vercel deploy` (preview) ou `npx vercel deploy --prod`. O MCP da Vercel no Cursor remete para este fluxo com o CLI.
 - **Variáveis de ambiente obrigatórias** no projeto Vercel (Production; opcionalmente Preview):
-  - **`DATABASE_URL`** — PostgreSQL (ex.: [Neon](https://neon.tech) ou [Vercel Postgres](https://vercel.com/storage/postgres)). Sem isto, o build omite `prisma migrate deploy` e a API falha ao iniciar (Prisma liga no arranque).
-  - **`JWT_SECRET`** — segredo forte para JWT (não uses valores por defeito em produção).
-- **`RESEND_API_KEY`** — chave da [Resend](https://resend.com) para enviar e-mails de recuperação de senha.
-- **`MAIL_FROM`** — remetente (ex.: `CasalCost <noreply@seudominio.com>`; em testes podes usar `onboarding@resend.dev`).
-- **`APP_URL`** — URL pública do frontend (ex.: `https://casalcost.vercel.app`) para links de reset no e-mail.
+  - **`DATABASE_URL`** — PostgreSQL (ex.: [Neon](https://neon.tech)). Sem isto, o build omite `prisma migrate deploy` e a API falha ao iniciar.
+  - **`DATABASE_URL_UNPOOLED`** — conexão directa para migrations (Neon).
+  - **`JWT_SECRET`** — segredo forte para JWT.
+  - **`RESEND_API_KEY`** — chave da [Resend](https://resend.com) para e-mails de recuperação de senha.
+  - **`MAIL_FROM`** — remetente (ex.: `CasalCost <noreply@seudominio.com>`).
+  - **`APP_URL`** — URL pública do frontend (ex.: `https://casalcost.vercel.app`).
 - Depois de configurares **`DATABASE_URL`**, faz **redeploy** para aplicar migrações durante o build ([`scripts/run-prisma-migrate-deploy.js`](scripts/run-prisma-migrate-deploy.js)).
 - **Seed:** com a mesma `DATABASE_URL`: `cd backend && npx prisma db seed`.
 
@@ -128,7 +130,22 @@ Fluxo por **link no e-mail** (válido 30 minutos):
 2. O backend envia um link via [Resend](https://resend.com) (ou regista o link nos logs em dev, se `RESEND_API_KEY` não estiver definida).
 3. O utilizador abre o link e define uma nova senha.
 
-Variáveis: `RESEND_API_KEY`, `MAIL_FROM`, `APP_URL` (ver `backend/.env.example`).
+Variáveis em **`backend/.env`** (local) ou no painel Vercel (produção): `RESEND_API_KEY`, `MAIL_FROM`, `APP_URL`.
+
+## Variáveis de ambiente (backend)
+
+Ficheiro único: **`backend/.env`** (gitignored). Exemplo para desenvolvimento local com Docker:
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5434/couple_finance_db?schema=public"
+DATABASE_URL_UNPOOLED="postgresql://user:password@localhost:5434/couple_finance_db?schema=public"
+JWT_SECRET="change-me-use-long-random-string"
+RESEND_API_KEY="re_..."
+MAIL_FROM="CasalCost <onboarding@resend.dev>"
+APP_URL="http://localhost:5173"
+```
+
+Em produção (Vercel), define as mesmas chaves no painel — **nunca** commites segredos no repositório.
 
 ## Tech summary
 

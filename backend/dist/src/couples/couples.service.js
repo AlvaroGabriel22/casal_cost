@@ -23,15 +23,15 @@ let CouplesService = class CouplesService {
     async invite(userId, partnerUsername) {
         const me = await this.prisma.user.findUnique({ where: { id: userId } });
         if (!me)
-            throw new common_1.NotFoundException('User not found');
+            throw new common_1.NotFoundException('Usuário não encontrado.');
         if (partnerUsername === me.username) {
-            throw new common_1.BadRequestException('Cannot invite yourself');
+            throw new common_1.BadRequestException('Você não pode convidar a si mesmo.');
         }
         const partner = await this.prisma.user.findFirst({
             where: { username: partnerUsername, deletedAt: null },
         });
         if (!partner)
-            throw new common_1.NotFoundException('Partner user not found');
+            throw new common_1.NotFoundException('Usuário do parceiro não encontrado.');
         const existing = await this.prisma.couple.findFirst({
             where: {
                 OR: [
@@ -42,7 +42,7 @@ let CouplesService = class CouplesService {
             },
         });
         if (existing) {
-            throw new common_1.ConflictException('Invitation or couple already exists');
+            throw new common_1.ConflictException('Já existe um convite ou um casal ativo com este parceiro.');
         }
         const couple = await this.prisma.couple.create({
             data: {
@@ -65,7 +65,7 @@ let CouplesService = class CouplesService {
             where: { userBId: userId, status: client_1.CoupleStatus.PENDING },
         });
         if (!pending) {
-            throw new common_1.NotFoundException('No pending invitation');
+            throw new common_1.NotFoundException('Não há convites pendentes para aceitar.');
         }
         const updated = await this.prisma.couple.update({
             where: { id: pending.id },
@@ -116,7 +116,7 @@ let CouplesService = class CouplesService {
             },
         });
         if (!c)
-            throw new common_1.NotFoundException('Couple not found');
+            throw new common_1.NotFoundException('Casal ativo não encontrado.');
         const updated = await this.prisma.couple.update({
             where: { id: coupleId },
             data: { status: client_1.CoupleStatus.DISABLED },

@@ -39,7 +39,7 @@ let PermissionService = class PermissionService {
             },
         });
         if (!c) {
-            (0, http_exceptions_1.throwForbiddenAccess)('You are not a member of this couple.');
+            (0, http_exceptions_1.throwForbiddenAccess)('Você não faz parte deste casal.');
         }
     }
     async canViewIndividualAccount(viewerId, ownerId) {
@@ -75,29 +75,29 @@ let PermissionService = class PermissionService {
             ? await this.canEditIndividualAccount(viewerId, ownerId)
             : await this.canViewIndividualAccount(viewerId, ownerId);
         if (!ok) {
-            (0, http_exceptions_1.throwForbiddenAccess)('No permission for this individual account.');
+            (0, http_exceptions_1.throwForbiddenAccess)('Você não tem permissão para acessar estas finanças individuais.');
         }
     }
     async assertExpenseReadable(userId, expense) {
         if (expense.scope === client_1.ExpenseScope.SHARED) {
             if (!expense.coupleId)
-                throw new common_1.NotFoundException('Shared expense without couple');
+                throw new common_1.NotFoundException('Despesa compartilhada sem casal associado.');
             await this.assertCoupleMembership(userId, expense.coupleId);
             return;
         }
         if (!expense.ownerUserId)
-            throw new common_1.NotFoundException('Invalid expense');
+            throw new common_1.NotFoundException('Despesa inválida.');
         await this.assertIndividualAccess(userId, expense.ownerUserId, false);
     }
     async assertExpenseEditable(userId, expense) {
         if (expense.scope === client_1.ExpenseScope.SHARED) {
             if (!expense.coupleId)
-                throw new common_1.NotFoundException('Shared expense without couple');
+                throw new common_1.NotFoundException('Despesa compartilhada sem casal associado.');
             await this.assertCoupleMembership(userId, expense.coupleId);
             return;
         }
         if (!expense.ownerUserId)
-            throw new common_1.NotFoundException('Invalid expense');
+            throw new common_1.NotFoundException('Despesa inválida.');
         await this.assertIndividualAccess(userId, expense.ownerUserId, true);
     }
 };

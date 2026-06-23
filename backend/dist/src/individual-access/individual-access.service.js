@@ -23,11 +23,11 @@ let IndividualAccessService = class IndividualAccessService {
     }
     async create(ownerId, body) {
         if (!body.canView && body.canEdit) {
-            throw new common_1.BadRequestException('canEdit requires canView');
+            throw new common_1.BadRequestException('Para permitir edição, é necessário também permitir visualização.');
         }
         const partner = await this.permission.getActiveCoupleForUser(ownerId);
         if (!partner || partner.partnerId !== body.allowedUserId) {
-            throw new common_1.BadRequestException('You can only grant access to your active partner.');
+            throw new common_1.BadRequestException('Você só pode conceder acesso ao seu parceiro do casal ativo.');
         }
         const row = await this.prisma.individualAccountAccess.upsert({
             where: {
@@ -65,7 +65,7 @@ let IndividualAccessService = class IndividualAccessService {
         const canView = body.canView ?? row.canView;
         const canEdit = body.canEdit ?? row.canEdit;
         if (!canView && canEdit) {
-            throw new common_1.BadRequestException('canEdit requires canView');
+            throw new common_1.BadRequestException('Para permitir edição, é necessário também permitir visualização.');
         }
         const updated = await this.prisma.individualAccountAccess.update({
             where: { id },

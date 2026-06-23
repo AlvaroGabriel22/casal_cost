@@ -25,7 +25,7 @@ let UsersService = class UsersService {
             include: { financialSettings: true },
         });
         if (!user)
-            throw new common_1.NotFoundException('User not found');
+            throw new common_1.NotFoundException('Usuário não encontrado.');
         return (0, api_response_1.ok)({
             id: user.id,
             name: user.name,
@@ -40,7 +40,7 @@ let UsersService = class UsersService {
                 where: { email: body.email, NOT: { id: userId }, deletedAt: null },
             });
             if (clash)
-                throw new common_1.ConflictException('Email in use');
+                throw new common_1.ConflictException('Este email já está em uso por outra conta.');
         }
         const user = await this.prisma.user.update({
             where: { id: userId },

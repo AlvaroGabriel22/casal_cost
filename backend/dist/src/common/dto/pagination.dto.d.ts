@@ -4,7 +4,7 @@ export declare class PaginationQueryDto {
 }
 export declare function paginate(page?: number, limit?: number): {
     skip: number;
-    take: any;
-    page: any;
-    limit: any;
+    take: number;
+    page: number;
+    limit: number;
 };

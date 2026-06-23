@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DeleteInstallmentDto = exports.UpdateInstallmentDto = exports.CreateInstallmentDto = void 0;
+exports.DeleteInstallmentDto = exports.PayInstallmentDto = exports.UpdateInstallmentDto = exports.CreateInstallmentDto = void 0;
 const class_transformer_1 = require("class-transformer");
 const class_validator_1 = require("class-validator");
 const client_1 = require("@prisma/client");
@@ -112,6 +112,16 @@ __decorate([
     (0, class_validator_1.Min)(1),
     __metadata("design:type", Number)
 ], UpdateInstallmentDto.prototype, "totalInstallments", void 0);
+class PayInstallmentDto {
+}
+exports.PayInstallmentDto = PayInstallmentDto;
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsArray)(),
+    (0, class_validator_1.ArrayNotEmpty)(),
+    (0, class_validator_1.IsUUID)('all', { each: true }),
+    __metadata("design:type", Array)
+], PayInstallmentDto.prototype, "occurrenceIds", void 0);
 class DeleteInstallmentDto extends create_expense_dto_1.ConfirmPasswordDto {
 }
 exports.DeleteInstallmentDto = DeleteInstallmentDto;

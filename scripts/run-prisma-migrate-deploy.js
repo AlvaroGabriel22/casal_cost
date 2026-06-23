@@ -1,5 +1,5 @@
 /**
- * Local: corre migrate com `backend/.env`.
+ * Local: usa variáveis de `backend/.env` (Prisma carrega automaticamente).
  * Vercel: usa só `DATABASE_URL` do painel; sem variável, omite migrate (evita falhar no build).
  */
 const { execSync } = require('child_process');

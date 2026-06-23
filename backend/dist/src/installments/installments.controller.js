@@ -34,8 +34,8 @@ let InstallmentsController = class InstallmentsController {
     update(user, id, dto) {
         return this.installments.update(user.id, id, dto);
     }
-    pay(user, id) {
-        return this.installments.pay(user.id, id);
+    pay(user, id, dto) {
+        return this.installments.pay(user.id, id, dto);
     }
     remove(user, id, dto) {
         return this.installments.remove(user.id, id, dto);
@@ -78,8 +78,9 @@ __decorate([
     (0, common_1.Patch)(':id/pay'),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
     __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:paramtypes", [Object, String, installment_dto_1.PayInstallmentDto]),
     __metadata("design:returntype", void 0)
 ], InstallmentsController.prototype, "pay", null);
 __decorate([

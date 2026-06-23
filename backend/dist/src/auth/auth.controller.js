@@ -27,6 +27,12 @@ let AuthController = class AuthController {
     login(dto) {
         return this.auth.login(dto.username, dto.password);
     }
+    forgotPassword(dto) {
+        return this.auth.forgotPassword(dto.email);
+    }
+    resetPassword(dto) {
+        return this.auth.resetPassword(dto.token, dto.password);
+    }
     me(req) {
         return this.auth.me(req.user.id);
     }
@@ -46,6 +52,20 @@ __decorate([
     __metadata("design:paramtypes", [auth_dto_1.LoginDto]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "login", null);
+__decorate([
+    (0, common_1.Post)('forgot-password'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [auth_dto_1.ForgotPasswordDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "forgotPassword", null);
+__decorate([
+    (0, common_1.Post)('reset-password'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [auth_dto_1.ResetPasswordDto]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "resetPassword", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Get)('me'),

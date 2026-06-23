@@ -12,6 +12,7 @@ const jwt_1 = require("@nestjs/jwt");
 const passport_1 = require("@nestjs/passport");
 const config_1 = require("@nestjs/config");
 const prisma_module_1 = require("../prisma/prisma.module");
+const mail_module_1 = require("../mail/mail.module");
 const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
 const jwt_strategy_1 = require("./jwt.strategy");
@@ -22,6 +23,7 @@ exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
             prisma_module_1.PrismaModule,
+            mail_module_1.MailModule,
             passport_1.PassportModule.register({ defaultStrategy: 'jwt' }),
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],

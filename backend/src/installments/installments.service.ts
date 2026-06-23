@@ -33,6 +33,7 @@ export class InstallmentsService {
       installment: {
         totalInstallments: dto.totalInstallments,
         firstReferenceMonth: dto.firstReferenceMonth,
+        dueDay: dto.dueDay,
       },
     };
     if (dto.scope === ExpenseScope.SHARED) {

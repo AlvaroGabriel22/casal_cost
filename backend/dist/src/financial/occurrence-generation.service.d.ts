@@ -11,7 +11,7 @@ export declare class OccurrenceGenerationService {
         referenceMonth: Date;
         amount: Prisma.Decimal | string;
         dueDay: number;
-    }): any;
+    }): Promise<void>;
     generateInstallmentOccurrences(params: {
         expenseId: string;
         userId: string;
@@ -20,8 +20,8 @@ export declare class OccurrenceGenerationService {
         totalInstallments: number;
         firstReferenceMonth: Date;
         dueDay?: number;
-    }): any;
-    expandRecurringForMonth(expenseId: string, referenceMonth: Date): any;
+    }): Promise<void>;
+    expandRecurringForMonth(expenseId: string, referenceMonth: Date): Promise<void>;
     private atMonthStart;
     private atMonthEnd;
     createOneTimeOccurrence(params: {
@@ -31,5 +31,5 @@ export declare class OccurrenceGenerationService {
         referenceMonth: Date;
         amount: Prisma.Decimal;
         dueDate: Date;
-    }): any;
+    }): Promise<void>;
 }
