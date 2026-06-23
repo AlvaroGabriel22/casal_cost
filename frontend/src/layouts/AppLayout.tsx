@@ -9,8 +9,6 @@ import {
   KeyRound,
   LogOut,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
   ReceiptText,
   Settings,
   ShieldCheck,
@@ -147,7 +145,7 @@ const COUPLE_ACK_PATHS = ['/dashboard/couple', '/expenses/couple'];
 
 export function AppLayout() {
   const [open, setOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const user = useAuthStore((s) => s.user);
   const navigate = useNavigate();
   const location = useLocation();
@@ -164,11 +162,13 @@ export function AppLayout() {
   return (
     <div className="min-h-screen bg-[#F5F7FA] text-slate-900">
       <div
-        className={`hidden transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:block ${
-          collapsed ? 'lg:w-20' : 'lg:w-72'
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        className={`hidden transition-[width] duration-200 lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:block ${
+          hovered ? 'lg:w-72 shadow-2xl' : 'lg:w-20'
         }`}
       >
-        <Sidebar collapsed={collapsed} />
+        <Sidebar collapsed={!hovered} />
       </div>
 
       {open && (
@@ -185,7 +185,7 @@ export function AppLayout() {
         </div>
       )}
 
-      <div className={`transition-[padding] duration-200 ${collapsed ? 'lg:pl-20' : 'lg:pl-72'}`}>
+      <div className="lg:pl-20">
         <header className="sticky top-0 z-30 flex min-h-16 items-center justify-between border-b border-slate-200 bg-white/95 px-4 backdrop-blur md:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <button
@@ -195,15 +195,6 @@ export function AppLayout() {
               aria-label="Abrir menu"
             >
               {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-            <button
-              type="button"
-              className="hidden h-10 w-10 items-center justify-center rounded-xl border border-[#0B2D5C]/25 bg-[#071A3D] text-white shadow-sm transition hover:bg-[#0B2D5C] focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2 lg:inline-flex"
-              onClick={() => setCollapsed((value) => !value)}
-              aria-label={collapsed ? 'Expandir menu lateral' : 'Minimizar menu lateral'}
-              title={collapsed ? 'Expandir menu lateral' : 'Minimizar menu lateral'}
-            >
-              {collapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
             </button>
             <h1 className="truncate text-lg font-bold text-slate-950 md:text-xl">{title}</h1>
           </div>
