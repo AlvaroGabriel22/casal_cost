@@ -85,7 +85,7 @@ function Sidebar({
           <p className="text-xs text-blue-100">Finanças com privacidade</p>
         </div>
       </div>
-      <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+      <nav className={`flex-1 space-y-4 p-3 ${collapsed ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         {nav.map((group) => (
           <div key={group.title} className="space-y-1">
             <p
