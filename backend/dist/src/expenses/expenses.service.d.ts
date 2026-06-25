@@ -13,6 +13,9 @@ export declare class ExpensesService {
     constructor(prisma: PrismaService, permission: PermissionService, occurrences: OccurrenceGenerationService, audit: AuditLogService);
     private monthStartFromYm;
     private defaultYm;
+    private dueDateFromMonth;
+    private resolveCardDueDay;
+    private resolveCardDueDate;
     private assertCoupleMember;
     createIndividual(userId: string, dto: CreateExpenseDto): Promise<{
         success: true;

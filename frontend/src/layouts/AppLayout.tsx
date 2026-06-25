@@ -20,6 +20,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../stores/auth.store';
 import { usePartnerCoupleExpenseNotification } from '../hooks/usePartnerCoupleExpenseNotification';
+import { AssistantChatWidget } from '../components/assistant/AssistantChatWidget';
 
 const nav = [
   {
@@ -254,6 +255,7 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+      <AssistantChatWidget />
     </div>
   );
 }

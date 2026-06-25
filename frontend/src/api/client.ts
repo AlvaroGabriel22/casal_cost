@@ -6,6 +6,10 @@ const rawBase = String(
 ).trim();
 const baseURL = (rawBase.replace(/\/$/, '') || '/api');
 
+export function getApiBaseUrl() {
+  return baseURL;
+}
+
 const api = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },

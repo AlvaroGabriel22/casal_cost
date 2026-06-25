@@ -10,6 +10,7 @@ export declare class CreateInstallmentDto {
     paidByUserId?: string;
     totalInstallments: number;
     firstReferenceMonth: string;
+    dueDay?: number;
     scope: ExpenseScope;
 }
 export declare class UpdateInstallmentDto {

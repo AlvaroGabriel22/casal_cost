@@ -60,4 +60,19 @@ export class AiService {
     });
     return response.choices[0]?.message?.content?.trim() ?? '';
   }
+
+  /** Streams chat completion tokens as they arrive. */
+  async *streamComplete(messages: ChatTurn[]): AsyncGenerator<string> {
+    if (!this.client) throw new Error('OpenAI não configurado.');
+    const stream = await this.client.chat.completions.create({
+      model: this.chatModel,
+      temperature: 0.3,
+      messages,
+      stream: true,
+    });
+    for await (const chunk of stream) {
+      const text = chunk.choices[0]?.delta?.content;
+      if (text) yield text;
+    }
+  }
 }

@@ -35,6 +35,7 @@ let InstallmentsService = class InstallmentsService {
             installment: {
                 totalInstallments: dto.totalInstallments,
                 firstReferenceMonth: dto.firstReferenceMonth,
+                dueDay: dto.dueDay,
             },
         };
         if (dto.scope === client_1.ExpenseScope.SHARED) {

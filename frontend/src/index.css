@@ -50,10 +50,30 @@
   animation-delay: 0.55s;
 }
 
+@keyframes assistant-typing-dots {
+  0%,
+  20% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.2;
+  }
+}
+
+.assistant-typing-dots {
+  display: inline-block;
+  letter-spacing: 0.1em;
+  animation: assistant-typing-dots 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-couple-heart-beat,
   .couple-heart-ripple,
-  .couple-heart-ripple-delay {
+  .couple-heart-ripple-delay,
+  .assistant-typing-dots {
     animation: none !important;
   }
 }

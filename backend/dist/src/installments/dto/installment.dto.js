@@ -62,6 +62,14 @@ __decorate([
     __metadata("design:type", String)
 ], CreateInstallmentDto.prototype, "firstReferenceMonth", void 0);
 __decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(31),
+    __metadata("design:type", Number)
+], CreateInstallmentDto.prototype, "dueDay", void 0);
+__decorate([
     (0, class_validator_1.IsEnum)(client_1.ExpenseScope),
     __metadata("design:type", String)
 ], CreateInstallmentDto.prototype, "scope", void 0);

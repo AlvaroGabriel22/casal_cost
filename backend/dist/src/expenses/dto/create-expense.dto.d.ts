@@ -8,6 +8,7 @@ declare class RecurrenceDto {
 declare class InstallmentMetaDto {
     totalInstallments: number;
     firstReferenceMonth: string;
+    dueDay?: number;
 }
 export declare class CreateExpenseDto {
     title: string;
