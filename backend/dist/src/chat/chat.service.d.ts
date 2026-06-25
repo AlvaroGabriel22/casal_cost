@@ -19,6 +19,13 @@ export declare class ChatService {
         }[];
         message: string;
     }>;
+    clearHistory(userId: string): Promise<{
+        success: true;
+        data: {
+            cleared: boolean;
+        };
+        message: string;
+    }>;
     reindex(userId: string): Promise<{
         success: true;
         data: {

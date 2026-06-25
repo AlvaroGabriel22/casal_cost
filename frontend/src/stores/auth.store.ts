@@ -1,5 +1,7 @@
 import { create } from 'zustand';
+import { resetChatSessionBinding } from '../lib/chatSession';
 import { authService } from '../services/auth.service';
+import { useChatStore } from './chat.store';
 import type { User } from '../types/finance';
 
 type AuthState = {
@@ -62,6 +64,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout() {
     localStorage.removeItem('token');
+    useChatStore.getState().reset();
+    resetChatSessionBinding();
     set({ token: null, user: null, isAuthenticated: false, booting: false });
   },
 }));

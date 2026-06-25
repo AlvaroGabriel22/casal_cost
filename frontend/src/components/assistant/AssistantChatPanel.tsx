@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw, Send, Sparkles } from 'lucide-react';
+import { RefreshCw, Send, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Spinner } from '../ui/States';
 import { AssistantMessageContent } from './AssistantMessageContent';
@@ -9,6 +9,7 @@ import { useAssistantChat } from '../../hooks/useAssistantChat';
 type AssistantChatPanelProps = {
   compact?: boolean;
   showReindex?: boolean;
+  showClear?: boolean;
   onSuccess?: (message: string) => void;
   onError?: (message: string) => void;
 };
@@ -16,6 +17,7 @@ type AssistantChatPanelProps = {
 export function AssistantChatPanel({
   compact = false,
   showReindex = true,
+  showClear = true,
   onSuccess,
   onError,
 }: AssistantChatPanelProps) {
@@ -23,11 +25,13 @@ export function AssistantChatPanel({
     messages,
     loading,
     sending,
+    clearing,
     streamingId,
     reindexing,
     error,
     setError,
     send,
+    clearConversation,
     reindex,
   } = useAssistantChat();
 
@@ -55,23 +59,45 @@ export function AssistantChatPanel({
     if (ok) onSuccess?.('Dados sincronizados com a IA.');
   }
 
+  async function handleClear() {
+    if (messages.length === 0) return;
+    if (!window.confirm('Limpar toda a conversa desta sessão?')) return;
+    const ok = await clearConversation();
+    if (ok) onSuccess?.('Conversa limpa.');
+  }
+
   const waitingForStream =
     sending && messages.some((m) => m.role === 'ASSISTANT' && m.id === streamingId && !m.content);
 
   return (
     <div className={`flex flex-col ${compact ? 'h-full' : ''}`}>
-      {showReindex ? (
-        <div className="mb-3 flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-9 px-3 py-1.5 text-xs"
-            loading={reindexing}
-            onClick={() => void handleReindex()}
-          >
-            <RefreshCw className="h-4 w-4" />
-            Sincronizar dados
-          </Button>
+      {showReindex || showClear ? (
+        <div className="mb-3 flex justify-end gap-2">
+          {showClear ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-9 px-3 py-1.5 text-xs"
+              loading={clearing}
+              disabled={sending || messages.length === 0}
+              onClick={() => void handleClear()}
+            >
+              <Trash2 className="h-4 w-4" />
+              Limpar conversa
+            </Button>
+          ) : null}
+          {showReindex ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-9 px-3 py-1.5 text-xs"
+              loading={reindexing}
+              onClick={() => void handleReindex()}
+            >
+              <RefreshCw className="h-4 w-4" />
+              Sincronizar dados
+            </Button>
+          ) : null}
         </div>
       ) : null}
 

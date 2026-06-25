@@ -25,6 +25,9 @@ let ChatController = class ChatController {
     history(user) {
         return this.chat.history(user.id);
     }
+    clearHistory(user) {
+        return this.chat.clearHistory(user.id);
+    }
     ask(user, dto) {
         return this.chat.ask(user.id, dto.message);
     }
@@ -59,6 +62,13 @@ __decorate([
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], ChatController.prototype, "history", null);
+__decorate([
+    (0, common_1.Delete)('history'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], ChatController.prototype, "clearHistory", null);
 __decorate([
     (0, common_1.Post)(),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),

@@ -16,6 +16,13 @@ export declare class ChatController {
         }[];
         message: string;
     }>;
+    clearHistory(user: AuthUser): Promise<{
+        success: true;
+        data: {
+            cleared: boolean;
+        };
+        message: string;
+    }>;
     ask(user: AuthUser, dto: ChatAskDto): Promise<{
         success: true;
         data: {

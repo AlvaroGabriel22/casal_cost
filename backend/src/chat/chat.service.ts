@@ -97,6 +97,11 @@ export class ChatService {
     return ok(messages, 'Operation completed successfully');
   }
 
+  async clearHistory(userId: string) {
+    await this.prisma.chatMessage.deleteMany({ where: { userId } });
+    return ok({ cleared: true }, 'Conversa limpa com sucesso.');
+  }
+
   async reindex(userId: string) {
     if (!this.ai.enabled) {
       throw new ServiceUnavailableException(

@@ -19,6 +19,11 @@ export const chatService = {
     return data.data;
   },
 
+  async clear() {
+    const { data } = await api.delete<ApiSuccess<{ cleared: boolean }>>('/chat/history');
+    return data.data;
+  },
+
   async ask(message: string) {
     const { data } = await api.post<ApiSuccess<{ reply: string }>>('/chat', {
       message,

@@ -90,6 +90,10 @@ let ChatService = class ChatService {
         });
         return (0, api_response_1.ok)(messages, 'Operation completed successfully');
     }
+    async clearHistory(userId) {
+        await this.prisma.chatMessage.deleteMany({ where: { userId } });
+        return (0, api_response_1.ok)({ cleared: true }, 'Conversa limpa com sucesso.');
+    }
     async reindex(userId) {
         if (!this.ai.enabled) {
             throw new common_1.ServiceUnavailableException('Assistente de IA indisponível (OPENAI_API_KEY não configurada).');

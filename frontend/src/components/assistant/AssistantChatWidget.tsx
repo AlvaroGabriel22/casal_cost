@@ -1,18 +1,27 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { MessageCircle, Sparkles, X } from 'lucide-react';
+import { MessageCircle, Sparkles, Trash2, X } from 'lucide-react';
 import { AssistantChatPanel } from './AssistantChatPanel';
 import { Toast } from '../ui/Toast';
+import { useAssistantChat } from '../../hooks/useAssistantChat';
 
 export function AssistantChatWidget() {
   const [open, setOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const location = useLocation();
   const hiddenOnPage = location.pathname === '/assistente';
+  const { messages, clearing, sending, clearConversation } = useAssistantChat();
 
   useEffect(() => {
     if (hiddenOnPage) setOpen(false);
   }, [hiddenOnPage]);
+
+  async function handleClear() {
+    if (messages.length === 0) return;
+    if (!window.confirm('Limpar toda a conversa desta sessão?')) return;
+    const ok = await clearConversation();
+    if (ok) setToast({ message: 'Conversa limpa.', type: 'success' });
+  }
 
   if (hiddenOnPage) return null;
 
@@ -44,19 +53,32 @@ export function AssistantChatWidget() {
                   <p className="text-xs text-blue-100">Respostas com base nos seus dados</p>
                 </div>
               </div>
-              <button
-                type="button"
-                aria-label="Fechar chat"
-                className="rounded-lg p-2 transition hover:bg-white/10"
-                onClick={() => setOpen(false)}
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Limpar conversa"
+                  title="Limpar conversa"
+                  disabled={clearing || sending || messages.length === 0}
+                  className="rounded-lg p-2 transition hover:bg-white/10 disabled:opacity-40"
+                  onClick={() => void handleClear()}
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Fechar chat"
+                  className="rounded-lg p-2 transition hover:bg-white/10"
+                  onClick={() => setOpen(false)}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
             <div className="flex min-h-0 flex-1 flex-col p-4">
               <AssistantChatPanel
                 compact
                 showReindex={false}
+                showClear={false}
                 onSuccess={(message) => setToast({ message, type: 'success' })}
                 onError={(message) => setToast({ message, type: 'error' })}
               />

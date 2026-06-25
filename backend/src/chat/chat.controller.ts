@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Res, UseGuards } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -14,6 +14,11 @@ export class ChatController {
   @Get('history')
   history(@CurrentUser() user: AuthUser) {
     return this.chat.history(user.id);
+  }
+
+  @Delete('history')
+  clearHistory(@CurrentUser() user: AuthUser) {
+    return this.chat.clearHistory(user.id);
   }
 
   @Post()
