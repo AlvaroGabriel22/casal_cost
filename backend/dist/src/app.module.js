@@ -21,6 +21,8 @@ const installments_module_1 = require("./installments/installments.module");
 const dashboard_module_1 = require("./dashboard/dashboard.module");
 const cards_module_1 = require("./cards/cards.module");
 const chat_module_1 = require("./chat/chat.module");
+const insights_module_1 = require("./insights/insights.module");
+const investments_module_1 = require("./investments/investments.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -40,6 +42,8 @@ exports.AppModule = AppModule = __decorate([
             dashboard_module_1.DashboardModule,
             cards_module_1.CardsModule,
             chat_module_1.ChatModule,
+            insights_module_1.InsightsModule,
+            investments_module_1.InvestmentsModule,
         ],
     })
 ], AppModule);

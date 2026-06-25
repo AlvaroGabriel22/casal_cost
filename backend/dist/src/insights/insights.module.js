@@ -6,18 +6,22 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.DashboardModule = void 0;
+exports.InsightsModule = void 0;
 const common_1 = require("@nestjs/common");
+const prisma_module_1 = require("../prisma/prisma.module");
 const financial_domain_module_1 = require("../financial/financial-domain.module");
 const investments_module_1 = require("../investments/investments.module");
-const dashboard_controller_1 = require("./dashboard.controller");
-let DashboardModule = class DashboardModule {
+const insights_controller_1 = require("./insights.controller");
+const insights_service_1 = require("./insights.service");
+let InsightsModule = class InsightsModule {
 };
-exports.DashboardModule = DashboardModule;
-exports.DashboardModule = DashboardModule = __decorate([
+exports.InsightsModule = InsightsModule;
+exports.InsightsModule = InsightsModule = __decorate([
     (0, common_1.Module)({
-        imports: [financial_domain_module_1.FinancialDomainModule, investments_module_1.InvestmentsModule],
-        controllers: [dashboard_controller_1.DashboardController],
+        imports: [prisma_module_1.PrismaModule, financial_domain_module_1.FinancialDomainModule, investments_module_1.InvestmentsModule],
+        controllers: [insights_controller_1.InsightsController],
+        providers: [insights_service_1.InsightsService],
+        exports: [insights_service_1.InsightsService],
     })
-], DashboardModule);
-//# sourceMappingURL=dashboard.module.js.map
+], InsightsModule);
+//# sourceMappingURL=insights.module.js.map

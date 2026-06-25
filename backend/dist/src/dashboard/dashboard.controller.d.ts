@@ -2,11 +2,13 @@ import type { AuthUser } from '../auth/current-user.decorator';
 import { FinancialCalculationService } from '../financial/financial-calculation.service';
 import { FinancialProjectionService } from '../financial/financial-projection.service';
 import { PermissionService } from '../permission/permission.service';
+import { InvestmentsService } from '../investments/investments.service';
 export declare class DashboardController {
     private readonly calc;
     private readonly projection;
     private readonly permission;
-    constructor(calc: FinancialCalculationService, projection: FinancialProjectionService, permission: PermissionService);
+    private readonly investments;
+    constructor(calc: FinancialCalculationService, projection: FinancialProjectionService, permission: PermissionService, investments: InvestmentsService);
     private defaultYm;
     individual(user: AuthUser, month?: string): Promise<{
         success: true;
@@ -20,6 +22,7 @@ export declare class DashboardController {
                 balance: string;
                 status: string;
             }[];
+            investmentSummary: import("../investments/investment.types").InvestmentScopeSummary;
             month: string;
             totalIncomeMonth: string;
             baseSalaryMonth: string;
@@ -58,6 +61,7 @@ export declare class DashboardController {
     } | {
         success: true;
         data: {
+            investmentSummary: import("../investments/investment.types").InvestmentScopeSummary;
             month: string;
             totalSharedExpenses: string;
             paidTotal: string;

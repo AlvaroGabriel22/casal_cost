@@ -47,12 +47,18 @@ export function CoupleDashboardPage() {
         />
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
             <MetricCard label="Compartilhadas" value={money(data.totalSharedExpenses)} tone="navy" />
             <MetricCard label="Pagas" value={money(data.paidTotal)} tone="good" />
             <MetricCard label="Pendentes" value={money(data.pendingTotal)} tone="warning" />
             <MetricCard label="Vencidas" value={money(data.overdueTotal)} tone="danger" />
             <MetricCard label="Responsabilidade mensal" value={money(data.totalMonthlyResponsibility ?? data.totalSharedExpenses)} />
+            <MetricCard
+              label="Investimento conjunto"
+              value={money(data.investmentSummary?.monthTotal ?? 0)}
+              hint={`Acumulado ${money(data.investmentSummary?.allTimeTotal ?? 0)} · soma dos parceiros`}
+              tone="good"
+            />
           </div>
 
           <div className="grid gap-6 xl:grid-cols-2">
@@ -89,6 +95,20 @@ export function CoupleDashboardPage() {
               <p className="text-sm text-slate-500">Ainda não há divisão detalhada por parceiro neste mês.</p>
             )}
           </Card>
+
+          {data.investmentSummary?.byPartner && data.investmentSummary.byPartner.length > 0 && (
+            <Card title="Aportes conjuntos por parceiro" subtitle={`Total do mês: ${money(data.investmentSummary.monthTotal)}`}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {data.investmentSummary.byPartner.map((partner) => (
+                  <div key={partner.userId} className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                    <p className="font-semibold text-slate-950">{partner.name}</p>
+                    <p className="mt-1 text-xl font-bold text-emerald-900">{money(partner.monthAmount)}</p>
+                    <p className="text-xs text-slate-500">Acumulado: {money(partner.allTimeAmount)}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
         </>
       )}
     </div>

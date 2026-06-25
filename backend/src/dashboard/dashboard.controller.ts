@@ -1,10 +1,12 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { InvestmentScope } from '@prisma/client';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/current-user.decorator';
 import { FinancialCalculationService } from '../financial/financial-calculation.service';
 import { FinancialProjectionService } from '../financial/financial-projection.service';
 import { PermissionService } from '../permission/permission.service';
+import { InvestmentsService } from '../investments/investments.service';
 import { ok } from '../common/api-response';
 
 @Controller('dashboard')
@@ -14,6 +16,7 @@ export class DashboardController {
     private readonly calc: FinancialCalculationService,
     private readonly projection: FinancialProjectionService,
     private readonly permission: PermissionService,
+    private readonly investments: InvestmentsService,
   ) {}
 
   private defaultYm(): string {
@@ -28,9 +31,15 @@ export class DashboardController {
     @Query('month') month?: string,
   ) {
     const m = month ?? this.defaultYm();
-    const dash = await this.calc.calculateIndividualMonth(user.id, m);
-    const futureProjection = await this.projection.projectMonths(user.id, 6);
-    return ok({ ...dash, futureProjection }, 'Operation completed successfully');
+    const [dash, futureProjection, investmentSummary] = await Promise.all([
+      this.calc.calculateIndividualMonth(user.id, m),
+      this.projection.projectMonths(user.id, 6),
+      this.investments.summarizeScope(user.id, InvestmentScope.INDIVIDUAL, m),
+    ]);
+    return ok(
+      { ...dash, futureProjection, investmentSummary },
+      'Operation completed successfully',
+    );
   }
 
   @Get('couple')
@@ -43,8 +52,11 @@ export class DashboardController {
       return ok(null, 'Operation completed successfully');
     }
     const m = month ?? this.defaultYm();
-    const data = await this.calc.calculateCoupleMonth(couple.coupleId, m);
-    return ok(data, 'Operation completed successfully');
+    const [data, investmentSummary] = await Promise.all([
+      this.calc.calculateCoupleMonth(couple.coupleId, m),
+      this.investments.summarizeScope(user.id, InvestmentScope.COUPLE, m),
+    ]);
+    return ok({ ...data, investmentSummary }, 'Operation completed successfully');
   }
 
   @Get('projection')

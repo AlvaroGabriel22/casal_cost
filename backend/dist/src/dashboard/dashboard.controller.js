@@ -14,17 +14,20 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DashboardController = void 0;
 const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../auth/current-user.decorator");
 const financial_calculation_service_1 = require("../financial/financial-calculation.service");
 const financial_projection_service_1 = require("../financial/financial-projection.service");
 const permission_service_1 = require("../permission/permission.service");
+const investments_service_1 = require("../investments/investments.service");
 const api_response_1 = require("../common/api-response");
 let DashboardController = class DashboardController {
-    constructor(calc, projection, permission) {
+    constructor(calc, projection, permission, investments) {
         this.calc = calc;
         this.projection = projection;
         this.permission = permission;
+        this.investments = investments;
     }
     defaultYm() {
         const d = new Date();
@@ -33,9 +36,12 @@ let DashboardController = class DashboardController {
     }
     async individual(user, month) {
         const m = month ?? this.defaultYm();
-        const dash = await this.calc.calculateIndividualMonth(user.id, m);
-        const futureProjection = await this.projection.projectMonths(user.id, 6);
-        return (0, api_response_1.ok)({ ...dash, futureProjection }, 'Operation completed successfully');
+        const [dash, futureProjection, investmentSummary] = await Promise.all([
+            this.calc.calculateIndividualMonth(user.id, m),
+            this.projection.projectMonths(user.id, 6),
+            this.investments.summarizeScope(user.id, client_1.InvestmentScope.INDIVIDUAL, m),
+        ]);
+        return (0, api_response_1.ok)({ ...dash, futureProjection, investmentSummary }, 'Operation completed successfully');
     }
     async couple(user, month) {
         const couple = await this.permission.getActiveCoupleForUser(user.id);
@@ -43,8 +49,11 @@ let DashboardController = class DashboardController {
             return (0, api_response_1.ok)(null, 'Operation completed successfully');
         }
         const m = month ?? this.defaultYm();
-        const data = await this.calc.calculateCoupleMonth(couple.coupleId, m);
-        return (0, api_response_1.ok)(data, 'Operation completed successfully');
+        const [data, investmentSummary] = await Promise.all([
+            this.calc.calculateCoupleMonth(couple.coupleId, m),
+            this.investments.summarizeScope(user.id, client_1.InvestmentScope.COUPLE, m),
+        ]);
+        return (0, api_response_1.ok)({ ...data, investmentSummary }, 'Operation completed successfully');
     }
     async proj(user, months) {
         const n = months ? parseInt(months, 10) : 6;
@@ -82,6 +91,7 @@ exports.DashboardController = DashboardController = __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     __metadata("design:paramtypes", [financial_calculation_service_1.FinancialCalculationService,
         financial_projection_service_1.FinancialProjectionService,
-        permission_service_1.PermissionService])
+        permission_service_1.PermissionService,
+        investments_service_1.InvestmentsService])
 ], DashboardController);
 //# sourceMappingURL=dashboard.controller.js.map

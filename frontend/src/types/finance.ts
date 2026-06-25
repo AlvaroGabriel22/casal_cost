@@ -16,6 +16,7 @@ export type FinancialSettings = {
 
 export type ExpenseStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
 export type ExpenseScope = 'INDIVIDUAL' | 'SHARED';
+export type InvestmentScope = 'INDIVIDUAL' | 'COUPLE';
 export type ExpenseType =
   | 'ONE_TIME'
   | 'FIXED'
@@ -126,6 +127,25 @@ export type Income = {
   isRecurring: boolean;
 };
 
+export type InvestmentScopeSummary = {
+  scope: InvestmentScope;
+  referenceMonth: string;
+  monthTotal: number;
+  previousMonthTotal: number;
+  allTimeTotal: number;
+  averageMonthly: number;
+  consecutiveMonths: number;
+  contributionsInMonth: number;
+  contributionsAllTime: number;
+  byPartner?: Array<{
+    userId: string;
+    name: string;
+    monthAmount: number;
+    allTimeAmount: number;
+  }>;
+  monthlyHistory: Array<{ month: string; amount: number }>;
+};
+
 export type IndividualDashboard = {
   month: string;
   totalIncomeMonth: string | number;
@@ -146,6 +166,7 @@ export type IndividualDashboard = {
     balance?: string | number;
     projectedBalance?: string | number;
   }>;
+  investmentSummary?: InvestmentScopeSummary;
 };
 
 export type CoupleDashboard = {
@@ -162,6 +183,7 @@ export type CoupleDashboard = {
   evolution?: Array<{ month: string; total: string | number }>;
   monthlyEvolution?: Array<{ month: string; total: string | number }>;
   upcomingBills?: Occurrence[];
+  investmentSummary?: InvestmentScopeSummary;
 };
 
 export type Couple = {

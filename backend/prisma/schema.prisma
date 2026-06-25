@@ -32,6 +32,11 @@ enum ExpenseScope {
   SHARED
 }
 
+enum InvestmentScope {
+  INDIVIDUAL
+  COUPLE
+}
+
 enum ExpenseType {
   ONE_TIME
   FIXED
@@ -97,6 +102,7 @@ model User {
   chatMessages         ChatMessage[]
   financeEmbeddings    FinanceEmbedding[]
   financeIndexState    FinanceIndexState?
+  investmentContributions InvestmentContribution[]
 }
 
 enum ChatRole {
@@ -183,9 +189,34 @@ model Couple {
   expenses           Expense[]
   expenseOccurrences ExpenseOccurrence[]
   installmentGroups  InstallmentGroup[]
+  investmentContributions InvestmentContribution[]
 
   @@index([userAId])
   @@index([userBId])
+}
+
+model InvestmentContribution {
+  id             String          @id @default(uuid()) @db.Uuid
+  userId         String          @db.Uuid
+  coupleId       String?         @db.Uuid
+  scope          InvestmentScope
+  amount         Decimal         @db.Decimal(12, 2)
+  referenceMonth DateTime        @db.Date
+  contributedAt  DateTime?       @db.Date
+  description    String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  deletedAt      DateTime?
+
+  user   User    @relation(fields: [userId], references: [id])
+  couple Couple? @relation(fields: [coupleId], references: [id])
+
+  @@index([userId])
+  @@index([coupleId])
+  @@index([referenceMonth])
+  @@index([scope])
+  @@index([userId, referenceMonth])
+  @@index([coupleId, referenceMonth])
 }
 
 model IndividualAccountAccess {

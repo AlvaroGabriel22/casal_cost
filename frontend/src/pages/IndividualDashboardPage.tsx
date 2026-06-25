@@ -78,6 +78,11 @@ export function IndividualDashboardPage() {
         <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to={statementLink('ALL')}>
           <MetricCard label="Total de despesas" value={money(data.totalExpensesMonth)} tone="navy" />
         </Link>
+        <MetricCard
+          label="Investimento individual"
+          value={money(data.investmentSummary?.monthTotal ?? 0)}
+          hint={`Acumulado ${money(data.investmentSummary?.allTimeTotal ?? 0)}`}
+        />
         <MetricCard label="Renda extra" value={money(data.extraIncomeMonth)} />
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:col-span-2">
           <p className="text-xs font-semibold uppercase text-slate-500">Status financeiro</p>
