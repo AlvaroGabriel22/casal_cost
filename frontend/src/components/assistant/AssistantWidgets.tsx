@@ -23,6 +23,7 @@ import type {
   AssistantOverview,
   ChallengeProgress,
   HabitsScore,
+  HealthObservation,
   HealthScore,
   InsightChallenge,
   InsightPriority,
@@ -112,6 +113,42 @@ export function AssistantHeader({ overview }: { overview: AssistantOverview }) {
   );
 }
 
+const OBSERVATION_STYLE: Record<
+  HealthObservation['tone'],
+  { border: string; bg: string; icon: typeof CheckCircle2; iconCls: string }
+> = {
+  POSITIVE: {
+    border: 'border-emerald-200',
+    bg: 'bg-emerald-50',
+    icon: CheckCircle2,
+    iconCls: 'text-emerald-600',
+  },
+  ATTENTION: {
+    border: 'border-amber-200',
+    bg: 'bg-amber-50',
+    icon: AlertTriangle,
+    iconCls: 'text-amber-600',
+  },
+  CRITICAL: {
+    border: 'border-red-200',
+    bg: 'bg-red-50',
+    icon: AlertTriangle,
+    iconCls: 'text-red-600',
+  },
+  INFO: {
+    border: 'border-slate-200',
+    bg: 'bg-slate-50',
+    icon: Lightbulb,
+    iconCls: 'text-slate-600',
+  },
+};
+
+function trendLabel(trend: HealthScore['trend'], delta: number) {
+  if (trend === 'UP') return `Melhorou ${delta} pts vs mês anterior`;
+  if (trend === 'DOWN') return `Caiu ${Math.abs(delta)} pts vs mês anterior`;
+  return 'Estável em relação ao mês anterior';
+}
+
 export function HealthScoreCard({ score }: { score: HealthScore }) {
   const tone =
     score.value >= 75
@@ -135,8 +172,7 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
         </div>
         <div className="mt-3 flex items-center gap-2 text-sm">
           <TrendIcon className="h-4 w-4" />
-          {score.delta > 0 ? '+' : ''}
-          {score.delta} pts
+          {trendLabel(score.trend, score.delta)}
         </div>
         <div className="mt-5 h-24">
           <ResponsiveContainer width="100%" height="100%">
@@ -156,57 +192,38 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
       </div>
 
       <div className="flex flex-col gap-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          {score.factors.map((factor) => {
-            const toneCls =
-              factor.status === 'GOOD'
-                ? 'border-emerald-200 bg-emerald-50'
-                : factor.status === 'WARNING'
-                  ? 'border-amber-200 bg-amber-50'
-                  : 'border-red-200 bg-red-50';
-            const barCls =
-              factor.status === 'GOOD'
-                ? 'bg-emerald-500'
-                : factor.status === 'WARNING'
-                  ? 'bg-amber-500'
-                  : 'bg-red-500';
+        <p className="rounded-xl border border-[#071A3D]/15 bg-[#071A3D]/5 px-4 py-3 text-sm leading-relaxed text-slate-800">
+          {score.summary}
+        </p>
+
+        <div className="space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            O que observamos nos seus dados
+          </p>
+          {score.observations.map((obs) => {
+            const style = OBSERVATION_STYLE[obs.tone];
+            const Icon = style.icon;
             return (
-              <div key={factor.key} className={`rounded-xl border p-3 ${toneCls}`}>
-                <div className="flex items-center justify-between text-sm font-semibold text-slate-900">
-                  <span>{factor.label}</span>
-                  <span>{Math.round(factor.score)}</span>
+              <article
+                key={obs.id}
+                className={`rounded-xl border p-4 ${style.border} ${style.bg}`}
+              >
+                <div className="flex gap-3">
+                  <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${style.iconCls}`} />
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-slate-950">{obs.title}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{obs.message}</p>
+                    {obs.tip && (
+                      <p className="mt-2 text-xs font-medium text-slate-600">
+                        <span className="font-semibold text-slate-800">Sugestão: </span>
+                        {obs.tip}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-white/70">
-                  <div className={`h-full ${barCls}`} style={{ width: `${Math.round(factor.score)}%` }} />
-                </div>
-                <p className="mt-2 text-xs text-slate-600">{factor.detail}</p>
-              </div>
+              </article>
             );
           })}
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
-            <p className="font-semibold">Pontos positivos</p>
-            <ul className="mt-2 space-y-1">
-              {(score.positives.length ? score.positives : ['Nada se destaca ainda.']).map((line) => (
-                <li key={line} className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-            <p className="font-semibold">Pontos de atenção</p>
-            <ul className="mt-2 space-y-1">
-              {(score.attentions.length ? score.attentions : ['Nenhum risco evidente.']).map((line) => (
-                <li key={line} className="flex gap-2">
-                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
         </div>
       </div>
     </section>

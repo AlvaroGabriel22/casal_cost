@@ -21,13 +21,12 @@ export interface InsightCard {
   tasks?: string[];
 }
 
-export interface ScoreFactor {
-  key: string;
-  label: string;
-  score: number;
-  weight: number;
-  status: 'GOOD' | 'WARNING' | 'BAD';
-  detail: string;
+export interface HealthObservation {
+  id: string;
+  tone: 'POSITIVE' | 'ATTENTION' | 'CRITICAL' | 'INFO';
+  title: string;
+  message: string;
+  tip?: string;
 }
 
 export interface HealthScore {
@@ -35,9 +34,8 @@ export interface HealthScore {
   delta: number;
   trend: 'UP' | 'DOWN' | 'STABLE';
   history: Array<{ month: string; value: number }>;
-  positives: string[];
-  attentions: string[];
-  factors: ScoreFactor[];
+  summary: string;
+  observations: HealthObservation[];
 }
 
 export interface ChallengeProgress {

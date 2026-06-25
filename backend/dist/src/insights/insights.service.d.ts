@@ -72,13 +72,12 @@ export interface MicroExpense {
     annualImpact: number;
     insight: string;
 }
-export interface ScoreFactor {
-    key: string;
-    label: string;
-    score: number;
-    weight: number;
-    status: 'GOOD' | 'WARNING' | 'BAD';
-    detail: string;
+export interface HealthObservation {
+    id: string;
+    tone: 'POSITIVE' | 'ATTENTION' | 'CRITICAL' | 'INFO';
+    title: string;
+    message: string;
+    tip?: string;
 }
 export interface HealthScore {
     value: number;
@@ -88,9 +87,8 @@ export interface HealthScore {
         month: string;
         value: number;
     }>;
-    positives: string[];
-    attentions: string[];
-    factors: ScoreFactor[];
+    summary: string;
+    observations: HealthObservation[];
 }
 export interface Discovery {
     id: string;
@@ -226,6 +224,7 @@ export declare class InsightsService {
     private snapshotMonth;
     private emptyMonth;
     private computeHealthScore;
+    private composeHealthObservations;
     private scoreForSlice;
     private computeRootCause;
     private computeCashFlow;
