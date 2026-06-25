@@ -12,6 +12,7 @@ import {
   ReceiptText,
   Settings,
   ShieldCheck,
+  Sparkles,
   User,
   Users,
   X,
@@ -28,6 +29,7 @@ const nav = [
       { to: '/statement/individual', label: 'Extrato', icon: ReceiptText },
       { to: '/expenses/individual', label: 'Despesas individuais', icon: CreditCard },
       { to: '/installments', label: 'Parcelamentos', icon: Banknote },
+      { to: '/assistente', label: 'Assistente IA', icon: Sparkles },
     ],
   },
   {
@@ -58,6 +60,7 @@ const titles: Record<string, string> = {
   '/expenses/couple': 'Despesas do casal',
   '/expenses/new': 'Nova despesa',
   '/installments': 'Parcelamentos',
+  '/assistente': 'Assistente financeiro (IA)',
   '/incomes': 'Receitas',
   '/couple': 'Gestão do casal',
   '/permissions': 'Permissões',

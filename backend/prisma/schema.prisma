@@ -94,6 +94,50 @@ model User {
   installmentGroups    InstallmentGroup[]
   passwordResetTokens  PasswordResetToken[]
   cards                UserCard[]
+  chatMessages         ChatMessage[]
+  financeEmbeddings    FinanceEmbedding[]
+  financeIndexState    FinanceIndexState?
+}
+
+enum ChatRole {
+  USER
+  ASSISTANT
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @db.Uuid
+  role      ChatRole
+  content   String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// Stores per-user financial knowledge chunks as pgvector embeddings (RAG).
+model FinanceEmbedding {
+  id        String                       @id @default(uuid()) @db.Uuid
+  userId    String                       @db.Uuid
+  kind      String
+  refId     String?
+  content   String
+  embedding Unsupported("vector(1536)")?
+  createdAt DateTime                     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+/// Tracks the signature of the user's data so the index is rebuilt when it changes.
+model FinanceIndexState {
+  userId    String   @id @db.Uuid
+  signature String
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserCard {
