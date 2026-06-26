@@ -87,4 +87,15 @@ export const statementImportService = {
     const { data } = await api.get<ApiSuccess<StatementImportRecord[]>>('/statement-imports');
     return data.data;
   },
+
+  async remove(importId: string, password: string) {
+    const { data } = await api.delete<ApiSuccess<{
+      importId: string;
+      fileName: string;
+      entriesRemoved: number;
+      monthsCovered: string[];
+      message: string;
+    }>>(`/statement-imports/${importId}`, { data: { password } });
+    return data.data;
+  },
 };

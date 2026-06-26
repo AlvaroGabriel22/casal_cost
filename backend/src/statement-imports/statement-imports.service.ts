@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
   UnsupportedMediaTypeException,
 } from '@nestjs/common';
 import {
@@ -12,6 +13,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { ok } from '../common/api-response';
 import { AuditLogService } from '../audit/audit-log.service';
+import { AuthService } from '../auth/auth.service';
 import { guessCategory, guessPaymentMethod } from './parsers/category-guess';
 import {
   BANK_LABELS,
@@ -28,6 +30,7 @@ export class StatementImportsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
+    private readonly auth: AuthService,
   ) {}
 
   detectFormat(fileName: string, mime?: string): BankStatementFormat | null {
@@ -126,14 +129,14 @@ export class StatementImportsService {
       for (const monthYm of monthsCovered) {
         const [y, m] = monthYm.split('-').map(Number);
         const ref = new Date(Date.UTC(y, m - 1, 1));
-        await tx.bankStatementEntry.updateMany({
+        // Remove all entries for the month (including soft-deleted) so reimport
+        // does not hit the unique fingerprint constraint.
+        await tx.bankStatementEntry.deleteMany({
           where: {
             userId,
             bank: parsed.bank,
             referenceMonth: ref,
-            deletedAt: null,
           },
-          data: { deletedAt: new Date() },
         });
       }
 
@@ -205,6 +208,52 @@ export class StatementImportsService {
           'Extrato importado. Os meses do arquivo substituíram os lançamentos anteriores desse banco.',
       },
       'Extrato importado com sucesso.',
+    );
+  }
+
+  async deleteImport(userId: string, importId: string, password: string) {
+    await this.auth.verifyPassword(userId, password);
+
+    const imp = await this.prisma.bankStatementImport.findFirst({
+      where: { id: importId, userId },
+    });
+    if (!imp) {
+      throw new NotFoundException('Importação não encontrada.');
+    }
+
+    const deletedEntries = await this.prisma.$transaction(async (tx) => {
+      const removed = await tx.bankStatementEntry.deleteMany({
+        where: { importId: imp.id, userId },
+      });
+      await tx.bankStatementImport.delete({ where: { id: imp.id } });
+      return removed.count;
+    });
+
+    await this.audit.log({
+      userId,
+      entity: 'BankStatementImport',
+      entityId: imp.id,
+      action: 'DELETE',
+      oldValue: {
+        fileName: imp.fileName,
+        bank: imp.bank,
+        lineCount: imp.lineCount,
+        monthsCovered: imp.monthsCovered,
+        entriesRemoved: deletedEntries,
+      },
+    });
+
+    return ok(
+      {
+        importId: imp.id,
+        fileName: imp.fileName,
+        bank: imp.bank,
+        bankLabel: BANK_LABELS[imp.bank],
+        monthsCovered: imp.monthsCovered,
+        entriesRemoved: deletedEntries,
+        message: 'Extrato excluído. Os lançamentos importados foram removidos.',
+      },
+      'Extrato excluído com sucesso.',
     );
   }
 

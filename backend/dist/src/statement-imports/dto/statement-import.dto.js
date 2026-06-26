@@ -9,7 +9,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.StatementBankHintDto = exports.StatementImportQueryDto = void 0;
+exports.DeleteStatementImportDto = exports.StatementBankHintDto = exports.StatementImportQueryDto = void 0;
 const client_1 = require("@prisma/client");
 const class_validator_1 = require("class-validator");
 class StatementImportQueryDto {
@@ -32,4 +32,12 @@ __decorate([
     (0, class_validator_1.IsEnum)(client_1.DetectedBank),
     __metadata("design:type", String)
 ], StatementBankHintDto.prototype, "bank", void 0);
+class DeleteStatementImportDto {
+}
+exports.DeleteStatementImportDto = DeleteStatementImportDto;
+__decorate([
+    (0, class_validator_1.IsString)(),
+    (0, class_validator_1.MinLength)(8),
+    __metadata("design:type", String)
+], DeleteStatementImportDto.prototype, "password", void 0);
 //# sourceMappingURL=statement-import.dto.js.map

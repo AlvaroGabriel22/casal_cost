@@ -1,7 +1,10 @@
 import {
   BadRequestException,
+  Body,
   Controller,
+  Delete,
   Get,
+  Param,
   Post,
   Query,
   UploadedFile,
@@ -14,6 +17,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/current-user.decorator';
 import { StatementImportsService } from './statement-imports.service';
 import {
+  DeleteStatementImportDto,
   StatementBankHintDto,
   StatementImportQueryDto,
 } from './dto/statement-import.dto';
@@ -65,5 +69,14 @@ export class StatementImportsController {
       throw new BadRequestException('Selecione um arquivo CSV ou OFX.');
     }
     return this.imports.import(user.id, file.buffer, file.originalname, query.bank);
+  }
+
+  @Delete(':id')
+  delete(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Body() dto: DeleteStatementImportDto,
+  ) {
+    return this.imports.deleteImport(user.id, id, dto.password);
   }
 }

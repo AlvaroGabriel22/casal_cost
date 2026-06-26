@@ -1,6 +1,8 @@
 import { PrismaService } from '../prisma/prisma.service';
 import { FinancialCalculationService } from '../financial/financial-calculation.service';
 import { InvestmentsService } from '../investments/investments.service';
+import { BankStatementAnalysis, BankStatementAnalysisService } from './bank-statement-analysis.service';
+import { FinanceContextPayload, FinanceContextService } from '../finance-context/finance-context.service';
 export type InsightPriority = 'HIGH' | 'MEDIUM' | 'LOW';
 export type InsightKind = 'WARNING' | 'OPPORTUNITY' | 'POSITIVE' | 'NEUTRAL' | 'TREND';
 export interface InsightCard {
@@ -210,6 +212,8 @@ export interface AssistantOverview {
     healthScore: HealthScore;
     investments: InvestmentAnalysis;
     habits: HabitsScore;
+    bankAnalysis: BankStatementAnalysis;
+    financeContext: FinanceContextPayload;
     challenges: InsightChallenge[];
     microExpenses: MicroExpense[];
     insights: InsightCard[];
@@ -218,13 +222,14 @@ export declare class InsightsService {
     private readonly prisma;
     private readonly calc;
     private readonly investments;
+    private readonly bankAnalysis;
+    private readonly financeContext;
     private readonly logger;
-    constructor(prisma: PrismaService, calc: FinancialCalculationService, investments: InvestmentsService);
+    constructor(prisma: PrismaService, calc: FinancialCalculationService, investments: InvestmentsService, bankAnalysis: BankStatementAnalysisService, financeContext: FinanceContextService);
     buildOverview(userId: string, monthYm?: string): Promise<AssistantOverview>;
     private snapshotMonth;
     private emptyMonth;
     private computeHealthScore;
-    private composeHealthObservations;
     private scoreForSlice;
     private computeRootCause;
     private computeCashFlow;

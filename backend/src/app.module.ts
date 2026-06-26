@@ -15,6 +15,7 @@ import { ChatModule } from './chat/chat.module';
 import { InsightsModule } from './insights/insights.module';
 import { InvestmentsModule } from './investments/investments.module';
 import { StatementImportsModule } from './statement-imports/statement-imports.module';
+import { FinanceContextModule } from './finance-context/finance-context.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { StatementImportsModule } from './statement-imports/statement-imports.mo
     InsightsModule,
     InvestmentsModule,
     StatementImportsModule,
+    FinanceContextModule,
   ],
 })
 export class AppModule {}

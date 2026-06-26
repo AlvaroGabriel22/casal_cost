@@ -3,6 +3,9 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { FinancialCalculationService } from '../financial/financial-calculation.service';
 import { AiService } from '../ai/ai.service';
+import { BankStatementAnalysisService } from '../insights/bank-statement-analysis.service';
+import { FinanceContextService } from '../finance-context/finance-context.service';
+import { findMatchingRule } from '../finance-context/finance-context.matcher';
 
 interface RagDoc {
   kind: string;
@@ -18,6 +21,8 @@ export class FinanceRagService {
     private readonly prisma: PrismaService,
     private readonly financial: FinancialCalculationService,
     private readonly ai: AiService,
+    private readonly bankAnalysis: BankStatementAnalysisService,
+    private readonly financeContext: FinanceContextService,
   ) {}
 
   private brl(value: Prisma.Decimal | string | number | null | undefined) {
@@ -45,6 +50,24 @@ export class FinanceRagService {
     return this.ym(d);
   }
 
+  private merchantFromDescription(description: string): string {
+    const parts = description
+      .split(' - ')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    let name = parts.length >= 2 ? parts[1] : parts[0] ?? description;
+    return name
+      .replace(/\(\d{3,4}\).*$/i, '')
+      .replace(/•••\.\d+\.\d+-••.*$/i, '')
+      .trim();
+  }
+
+  private isBankStatementQuery(query: string): boolean {
+    return /extrato|banc[aá]ri|nubank|inter|bradesco|pix|transfer|invest|rdb|cdb|aplic|resgat|lan[cç]amento|gasto|d[eé]bito|cr[eé]dito|saldo|moviment/i.test(
+      query,
+    );
+  }
+
   private async getActiveCoupleId(userId: string): Promise<string | null> {
     const couple = await this.prisma.couple.findFirst({
       where: {
@@ -66,7 +89,7 @@ export class FinanceRagService {
         ...(coupleId ? [{ coupleId }] : []),
       ],
     };
-    const [expense, occurrence, income, settings, bankEntries] = await Promise.all([
+    const [expense, occurrence, income, settings, bankEntries, contextRules] = await Promise.all([
       this.prisma.expense.aggregate({
         where: expenseWhere,
         _count: true,
@@ -91,6 +114,11 @@ export class FinanceRagService {
         _count: true,
         _max: { updatedAt: true },
       }),
+      this.prisma.financeContextRule.aggregate({
+        where: { userId },
+        _count: true,
+        _max: { updatedAt: true },
+      }),
     ]);
     return JSON.stringify({
       e: [expense._count, expense._max.updatedAt],
@@ -98,6 +126,7 @@ export class FinanceRagService {
       i: [income._count, income._max.updatedAt],
       s: settings?.updatedAt ?? null,
       b: [bankEntries._count, bankEntries._max.updatedAt],
+      c: [contextRules._count, contextRules._max.updatedAt],
     });
   }
 
@@ -115,6 +144,15 @@ export class FinanceRagService {
         content: `[Configuração financeira] salário base: ${this.brl(
           settings.baseSalary,
         )} | dia do pagamento do salário: ${settings.salaryPaymentDay} | moeda: ${settings.defaultCurrency}.`,
+      });
+    }
+
+    const contextRules = await this.financeContext.listRules(userId);
+    for (const line of this.financeContext.formatRulesForRag(contextRules)) {
+      docs.push({
+        kind: 'user_context',
+        refId: null,
+        content: line,
       });
     }
 
@@ -216,18 +254,35 @@ export class FinanceRagService {
     const bankLines = await this.prisma.bankStatementEntry.findMany({
       where: { userId, deletedAt: null },
       orderBy: { transactionDate: 'desc' },
-      take: 400,
+      take: 2000,
     });
     for (const line of bankLines) {
+      const merchant = this.merchantFromDescription(line.description);
+      const rule = findMatchingRule(contextRules, line.description, merchant);
       docs.push({
         kind: 'bank_import',
         refId: line.id,
         content: `[Extrato bancário ${line.bank}] ${this.ymd(line.transactionDate)} | ${
           line.direction === 'DEBIT' ? 'saída' : 'entrada'
-        }: ${this.brl(line.amount)} | ${line.description} | categoria sugerida: ${
-          line.category ?? 'Outros'
-        } | mês ref: ${this.ym(line.referenceMonth)}.`,
+        }: ${this.brl(line.amount)} | ${line.description} | categoria: ${
+          rule?.category ?? line.category ?? 'Outros'
+        } | mês ref: ${this.ym(line.referenceMonth)}.${
+          rule ? ` Explicado pelo usuário: ${rule.motive}` : ''
+        }`,
       });
+    }
+
+    try {
+      const analysis = await this.bankAnalysis.analyze(userId, base, contextRules);
+      for (const [index, text] of this.bankAnalysis.formatForRag(analysis).entries()) {
+        docs.push({
+          kind: 'bank_analysis',
+          refId: `bank-analysis-${index}`,
+          content: text,
+        });
+      }
+    } catch (err) {
+      this.logger.warn(`Falha ao montar análise de extrato: ${err}`);
     }
 
     return docs;
@@ -295,9 +350,94 @@ export class FinanceRagService {
     return rows.map((r) => r.content);
   }
 
+  /** Retrieves relevant chunks, prioritizing extrato and contexto ensinado. */
+  async retrieveForChat(
+    userId: string,
+    queryEmbedding: number[],
+    query: string,
+  ): Promise<string[]> {
+    const isBank = this.isBankStatementQuery(query);
+    const k = isBank ? 12 : 8;
+    const literal = `[${queryEmbedding.join(',')}]`;
+
+    const [contextRows, semantic, bankRows] = await Promise.all([
+      this.prisma.$queryRaw<{ content: string }[]>`
+        SELECT "content" FROM "FinanceEmbedding"
+        WHERE "userId" = ${userId}::uuid AND "kind" = 'user_context'
+        LIMIT 30
+      `,
+      this.retrieve(userId, queryEmbedding, k),
+      isBank
+        ? this.prisma.$queryRaw<{ content: string }[]>`
+            SELECT "content" FROM "FinanceEmbedding"
+            WHERE "userId" = ${userId}::uuid
+              AND "kind" IN ('bank_analysis', 'bank_import')
+              AND "embedding" IS NOT NULL
+            ORDER BY "embedding" <=> ${literal}::vector
+            LIMIT 16
+          `
+        : Promise.resolve([]),
+    ]);
+
+    const seen = new Set<string>();
+    const merged: string[] = [];
+    for (const c of [
+      ...contextRows.map((r) => r.content),
+      ...bankRows.map((r) => r.content),
+      ...semantic,
+    ]) {
+      if (!seen.has(c)) {
+        seen.add(c);
+        merged.push(c);
+      }
+    }
+    return merged.slice(0, 22);
+  }
+
+  /** Always-accurate bank statement block injected into every chat message. */
+  async buildBankStatementContext(userId: string): Promise<string> {
+    const base = this.currentYm();
+    const contextRules = await this.financeContext.listRules(userId);
+
+    try {
+      const analysis = await this.bankAnalysis.analyze(userId, base, contextRules);
+      if (!analysis.hasData) {
+        return contextRules.length
+          ? `Contexto ensinado pelo usuário (sem extrato importado ainda):\n${this.financeContext.formatRulesForRag(contextRules).join('\n')}`
+          : 'Nenhum extrato bancário importado.';
+      }
+
+      const parts: string[] = [];
+
+      if (contextRules.length) {
+        parts.push('=== Contexto ensinado pelo usuário (prioridade máxima) ===');
+        parts.push(...this.financeContext.formatRulesForRag(contextRules));
+      }
+
+      parts.push('=== Análise do extrato bancário ===');
+      parts.push(...this.bankAnalysis.formatForRag(analysis));
+
+      const spend = analysis.spendingAnalysis;
+      if (spend?.expenseDetails.length) {
+        parts.push(`=== Gastos detalhados (${spend.referenceMonth}) ===`);
+        for (const d of spend.expenseDetails.slice(0, 50)) {
+          parts.push(
+            `${d.date} | ${d.merchant} | ${this.brl(d.amount)} | ${d.category}${d.userMotive ? ` | explicado: ${d.userMotive}` : ''}${d.isRecurring ? ' | recorrente' : ''}`,
+          );
+        }
+      }
+
+      return parts.join('\n');
+    } catch (err) {
+      this.logger.warn(`Falha ao montar contexto de extrato: ${err}`);
+      return '';
+    }
+  }
+
   /** Always-accurate structured snapshot for the current and adjacent months. */
   async buildLiveSummary(userId: string): Promise<string> {
     const base = this.currentYm();
+    const contextRules = await this.financeContext.listRules(userId);
     const months = [this.addMonths(base, -1), base, this.addMonths(base, 1)];
     const parts: string[] = [];
     for (const monthYm of months) {
@@ -324,6 +464,44 @@ export class FinanceRagService {
         // ignore month failures
       }
     }
+
+    if (contextRules.length) {
+      parts.push(
+        `Regras ensinadas pelo usuário (${contextRules.length}): ${contextRules
+          .map((r) => `"${r.displayLabel}" = ${r.motive}`)
+          .join('; ')}.`,
+      );
+    }
+
+    try {
+      const analysis = await this.bankAnalysis.analyze(userId, base, contextRules);
+      if (analysis.hasData) {
+        parts.push(
+          `Extrato bancário (${analysis.banks.join(', ')}): ${analysis.totalMovements} movimentações. Investido: ${this.brl(analysis.currentlyInvested)}.`,
+        );
+        const spend = analysis.spendingAnalysis;
+        if (spend) {
+          parts.push(
+            `Consumo ${spend.referenceMonth}: gastos ${this.brl(spend.totalSpent)}, entradas ${this.brl(spend.totalIncome)}${spend.spentMoreThanEarned ? `, déficit ${this.brl(spend.overspendAmount)}` : ''}. Top categorias: ${spend.topCategories
+              .slice(0, 4)
+              .map((c) => `${c.category} ${this.brl(c.total)}`)
+              .join(', ')}.`,
+          );
+          const taught = spend.expenseDetails.filter((d) => d.userMotive).slice(0, 8);
+          if (taught.length) {
+            parts.push(
+              `Gastos já explicados: ${taught.map((d) => `${d.merchant} (${d.userMotive})`).join('; ')}.`,
+            );
+          }
+        }
+        for (const lot of analysis.investmentLots.filter((l) => l.status !== 'REDEEMED').slice(0, 5)) {
+          parts.push(lot.narrative);
+        }
+      }
+    } catch {
+      // ignore bank analysis failures
+    }
+
     return parts.join('\n');
   }
 }

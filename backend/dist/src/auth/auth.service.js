@@ -99,6 +99,18 @@ let AuthService = class AuthService {
             },
         }, 'Operation completed successfully');
     }
+    async verifyPassword(userId, password) {
+        if (!password?.trim()) {
+            throw new common_1.UnauthorizedException('Confirme sua senha para concluir esta ação.');
+        }
+        const user = await this.prisma.user.findFirst({
+            where: { id: userId, deletedAt: null },
+            select: { passwordHash: true },
+        });
+        if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+            throw new common_1.UnauthorizedException('Senha incorreta. Verifique e tente novamente.');
+        }
+    }
     async login(username, password) {
         const user = await this.prisma.user.findFirst({
             where: { username, deletedAt: null },

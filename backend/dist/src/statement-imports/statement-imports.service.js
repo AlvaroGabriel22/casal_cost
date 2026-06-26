@@ -15,13 +15,15 @@ const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const api_response_1 = require("../common/api-response");
 const audit_log_service_1 = require("../audit/audit-log.service");
+const auth_service_1 = require("../auth/auth.service");
 const category_guess_1 = require("./parsers/category-guess");
 const statement_parser_1 = require("./parsers/statement.parser");
 const utils_1 = require("./parsers/utils");
 let StatementImportsService = class StatementImportsService {
-    constructor(prisma, audit) {
+    constructor(prisma, audit, auth) {
         this.prisma = prisma;
         this.audit = audit;
+        this.auth = auth;
     }
     detectFormat(fileName, mime) {
         const lower = fileName.toLowerCase();
@@ -94,14 +96,12 @@ let StatementImportsService = class StatementImportsService {
             for (const monthYm of monthsCovered) {
                 const [y, m] = monthYm.split('-').map(Number);
                 const ref = new Date(Date.UTC(y, m - 1, 1));
-                await tx.bankStatementEntry.updateMany({
+                await tx.bankStatementEntry.deleteMany({
                     where: {
                         userId,
                         bank: parsed.bank,
                         referenceMonth: ref,
-                        deletedAt: null,
                     },
-                    data: { deletedAt: new Date() },
                 });
             }
             const imp = await tx.bankStatementImport.create({
@@ -164,6 +164,44 @@ let StatementImportsService = class StatementImportsService {
             message: 'Extrato importado. Os meses do arquivo substituíram os lançamentos anteriores desse banco.',
         }, 'Extrato importado com sucesso.');
     }
+    async deleteImport(userId, importId, password) {
+        await this.auth.verifyPassword(userId, password);
+        const imp = await this.prisma.bankStatementImport.findFirst({
+            where: { id: importId, userId },
+        });
+        if (!imp) {
+            throw new common_1.NotFoundException('Importação não encontrada.');
+        }
+        const deletedEntries = await this.prisma.$transaction(async (tx) => {
+            const removed = await tx.bankStatementEntry.deleteMany({
+                where: { importId: imp.id, userId },
+            });
+            await tx.bankStatementImport.delete({ where: { id: imp.id } });
+            return removed.count;
+        });
+        await this.audit.log({
+            userId,
+            entity: 'BankStatementImport',
+            entityId: imp.id,
+            action: 'DELETE',
+            oldValue: {
+                fileName: imp.fileName,
+                bank: imp.bank,
+                lineCount: imp.lineCount,
+                monthsCovered: imp.monthsCovered,
+                entriesRemoved: deletedEntries,
+            },
+        });
+        return (0, api_response_1.ok)({
+            importId: imp.id,
+            fileName: imp.fileName,
+            bank: imp.bank,
+            bankLabel: statement_parser_1.BANK_LABELS[imp.bank],
+            monthsCovered: imp.monthsCovered,
+            entriesRemoved: deletedEntries,
+            message: 'Extrato excluído. Os lançamentos importados foram removidos.',
+        }, 'Extrato excluído com sucesso.');
+    }
     async listImports(userId) {
         const rows = await this.prisma.bankStatementImport.findMany({
             where: { userId },
@@ -202,6 +240,7 @@ exports.StatementImportsService = StatementImportsService;
 exports.StatementImportsService = StatementImportsService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        audit_log_service_1.AuditLogService])
+        audit_log_service_1.AuditLogService,
+        auth_service_1.AuthService])
 ], StatementImportsService);
 //# sourceMappingURL=statement-imports.service.js.map

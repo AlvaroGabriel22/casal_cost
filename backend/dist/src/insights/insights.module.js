@@ -11,17 +11,19 @@ const common_1 = require("@nestjs/common");
 const prisma_module_1 = require("../prisma/prisma.module");
 const financial_domain_module_1 = require("../financial/financial-domain.module");
 const investments_module_1 = require("../investments/investments.module");
+const finance_context_module_1 = require("../finance-context/finance-context.module");
 const insights_controller_1 = require("./insights.controller");
 const insights_service_1 = require("./insights.service");
+const bank_statement_analysis_service_1 = require("./bank-statement-analysis.service");
 let InsightsModule = class InsightsModule {
 };
 exports.InsightsModule = InsightsModule;
 exports.InsightsModule = InsightsModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule, financial_domain_module_1.FinancialDomainModule, investments_module_1.InvestmentsModule],
+        imports: [prisma_module_1.PrismaModule, financial_domain_module_1.FinancialDomainModule, investments_module_1.InvestmentsModule, finance_context_module_1.FinanceContextModule],
         controllers: [insights_controller_1.InsightsController],
-        providers: [insights_service_1.InsightsService],
-        exports: [insights_service_1.InsightsService],
+        providers: [insights_service_1.InsightsService, bank_statement_analysis_service_1.BankStatementAnalysisService],
+        exports: [insights_service_1.InsightsService, bank_statement_analysis_service_1.BankStatementAnalysisService],
     })
 ], InsightsModule);
 //# sourceMappingURL=insights.module.js.map

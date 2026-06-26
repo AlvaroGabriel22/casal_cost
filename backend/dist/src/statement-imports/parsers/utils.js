@@ -9,7 +9,7 @@ const crypto_1 = require("crypto");
 function buildFingerprint(userId, bank, line) {
     const date = line.transactionDate.toISOString().slice(0, 10);
     const key = line.externalId
-        ? `${userId}|${bank}|${line.externalId}`
+        ? `${userId}|${bank}|${line.externalId}|${line.direction}|${line.amount.toFixed(2)}`
         : `${userId}|${bank}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
     return (0, crypto_1.createHash)('sha256').update(key).digest('hex');
 }
@@ -28,14 +28,29 @@ function ym(d) {
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 function parseBrazilianAmount(raw) {
-    const cleaned = raw
-        .trim()
-        .replace(/[R$\s]/gi, '')
-        .replace(/\./g, '')
-        .replace(',', '.');
-    if (!cleaned || cleaned === '-')
+    let value = raw.trim().replace(/[R$\s]/gi, '');
+    if (!value || value === '-')
         return null;
-    const n = Number(cleaned);
+    let sign = 1;
+    if (value.startsWith('-')) {
+        sign = -1;
+        value = value.slice(1);
+    }
+    else if (value.startsWith('(') && value.endsWith(')')) {
+        sign = -1;
+        value = value.slice(1, -1);
+    }
+    if (/^\d{1,12}\.\d{1,2}$/.test(value)) {
+        const n = Number(value) * sign;
+        return Number.isFinite(n) ? n : null;
+    }
+    if (/,\d{1,2}$/.test(value)) {
+        value = value.replace(/\./g, '').replace(',', '.');
+    }
+    else if (/,\d{3}/.test(value)) {
+        value = value.replace(/,/g, '');
+    }
+    const n = Number(value) * sign;
     return Number.isFinite(n) ? n : null;
 }
 function parseFlexibleDate(raw) {

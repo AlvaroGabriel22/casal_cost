@@ -1,10 +1,12 @@
 import { BankStatementFormat, DetectedBank } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
+import { AuthService } from '../auth/auth.service';
 export declare class StatementImportsService {
     private readonly prisma;
     private readonly audit;
-    constructor(prisma: PrismaService, audit: AuditLogService);
+    private readonly auth;
+    constructor(prisma: PrismaService, audit: AuditLogService, auth: AuthService);
     detectFormat(fileName: string, mime?: string): BankStatementFormat | null;
     preview(userId: string, buffer: Buffer, fileName: string, bankHint?: DetectedBank): {
         success: true;
@@ -37,6 +39,19 @@ export declare class StatementImportsService {
             fileName: string;
             imported: number;
             monthsCovered: string[];
+            message: string;
+        };
+        message: string;
+    }>;
+    deleteImport(userId: string, importId: string, password: string): Promise<{
+        success: true;
+        data: {
+            importId: string;
+            fileName: string;
+            bank: import(".prisma/client").$Enums.DetectedBank;
+            bankLabel: string;
+            monthsCovered: string[];
+            entriesRemoved: number;
             message: string;
         };
         message: string;

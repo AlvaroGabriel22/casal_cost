@@ -6,3 +6,6 @@ export declare class StatementImportQueryDto {
 export declare class StatementBankHintDto {
     bank?: DetectedBank;
 }
+export declare class DeleteStatementImportDto {
+    password: string;
+}

@@ -8,8 +8,9 @@ export function buildFingerprint(
   line: ParsedBankLine,
 ): string {
   const date = line.transactionDate.toISOString().slice(0, 10);
+  // Nubank reuses the same Identificador for paired movements (e.g. credit + Pix).
   const key = line.externalId
-    ? `${userId}|${bank}|${line.externalId}`
+    ? `${userId}|${bank}|${line.externalId}|${line.direction}|${line.amount.toFixed(2)}`
     : `${userId}|${bank}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
   return createHash('sha256').update(key).digest('hex');
 }
@@ -32,13 +33,34 @@ export function ym(d: Date): string {
 }
 
 export function parseBrazilianAmount(raw: string): number | null {
-  const cleaned = raw
-    .trim()
-    .replace(/[R$\s]/gi, '')
-    .replace(/\./g, '')
-    .replace(',', '.');
-  if (!cleaned || cleaned === '-') return null;
-  const n = Number(cleaned);
+  let value = raw.trim().replace(/[R$\s]/gi, '');
+  if (!value || value === '-') return null;
+
+  let sign = 1;
+  if (value.startsWith('-')) {
+    sign = -1;
+    value = value.slice(1);
+  } else if (value.startsWith('(') && value.endsWith(')')) {
+    sign = -1;
+    value = value.slice(1, -1);
+  }
+
+  // Nubank/OFX: ponto decimal com centavos — 1800.00, 151.19, 2600.00
+  if (/^\d{1,12}\.\d{1,2}$/.test(value)) {
+    const n = Number(value) * sign;
+    return Number.isFinite(n) ? n : null;
+  }
+
+  // Formato BR: vírgula decimal — 1.800,00 ou 1800,50
+  if (/,\d{1,2}$/.test(value)) {
+    value = value.replace(/\./g, '').replace(',', '.');
+  }
+  // Formato US: vírgula milhar — 1,800.00
+  else if (/,\d{3}/.test(value)) {
+    value = value.replace(/,/g, '');
+  }
+
+  const n = Number(value) * sign;
   return Number.isFinite(n) ? n : null;
 }
 

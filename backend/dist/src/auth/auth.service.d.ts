@@ -26,6 +26,7 @@ export declare class AuthService {
         };
         message: string;
     }>;
+    verifyPassword(userId: string, password?: string): Promise<void>;
     login(username: string, password: string): Promise<{
         success: true;
         data: {

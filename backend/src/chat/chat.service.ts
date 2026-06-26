@@ -17,6 +17,11 @@ Regras de conteúdo:
 - Quando faltar informação para responder com precisão, diga o que falta de forma transparente.
 - Valores são em Reais (R$). Seja concreto com números quando eles existirem no contexto.
 - Dê insights úteis: tendências de gastos, categorias que mais pesam, contas a vencer, metas de economia realistas e planos de ação.
+- Quando houver dados de extrato bancário importado, responda com base neles: gastos por estabelecimento, categorias, recorrentes, investimentos RDB/CDB e resgates. Use o bloco "Extrato bancário" como fonte principal para perguntas sobre o banco.
+- Priorize SEMPRE o contexto ensinado pelo usuário no detalhamento (regras de estabelecimento/pessoa) sobre suposições genéricas ou categorização automática.
+- Se o usuário ensinou que um Pix ou transferência é reforço de curso, aluguel, etc., use essa explicação — não trate como gasto genérico.
+- Se um lançamento recorrente não tiver motivo conhecido no contexto, pergunte de forma objetiva o que é (ex.: "Para quem é o Pix para Vinicios?").
+- Entrada que não saiu no mesmo mês e foi aplicada em RDB deve ser tratada como investimento. Resgates parciais devem ser relacionados às aplicações anteriores.
 - Quando o usuário pedir metas ou planos, proponha passos práticos com base no saldo e nas despesas reais dele.
 - Não revele dados de outros usuários nem detalhes técnicos internos do sistema.
 
@@ -45,9 +50,10 @@ export class ChatService {
   private async buildAskMessages(userId: string, message: string) {
     await this.rag.ensureIndex(userId);
 
-    const [queryEmbedding, liveSummary, recent] = await Promise.all([
+    const [queryEmbedding, liveSummary, bankContext, recent] = await Promise.all([
       this.ai.embedOne(message),
       this.rag.buildLiveSummary(userId),
+      this.rag.buildBankStatementContext(userId),
       this.prisma.chatMessage.findMany({
         where: { userId },
         orderBy: { createdAt: 'desc' },
@@ -55,12 +61,14 @@ export class ChatService {
       }),
     ]);
 
-    const chunks = await this.rag.retrieve(userId, queryEmbedding, 8);
+    const chunks = await this.rag.retrieveForChat(userId, queryEmbedding, message);
     const history = recent.reverse();
 
     const context = `Resumo ao vivo das finanças do usuário:\n${
       liveSummary || 'Sem movimentações recentes.'
-    }\n\nConhecimento recuperado dos dados do usuário:\n${
+    }\n\nExtrato bancário e contexto ensinado (sempre consulte para perguntas sobre gastos do banco):\n${
+      bankContext || 'Nenhum extrato importado.'
+    }\n\nConhecimento adicional recuperado:\n${
       chunks.length ? chunks.map((c) => `- ${c}`).join('\n') : '- (nenhum)'
     }`;
 

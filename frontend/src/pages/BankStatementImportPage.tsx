@@ -1,15 +1,17 @@
 import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FileUp, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { FileUp, Upload, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { Card, MetricCard } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Select } from '../components/ui/Field';
+import { Input, Select } from '../components/ui/Field';
 import { EmptyState, ErrorState, Spinner } from '../components/ui/States';
 import { Toast } from '../components/ui/Toast';
+import { Modal } from '../components/ui/Modal';
 import {
   BANK_OPTIONS,
   statementImportService,
   type DetectedBank,
+  type StatementImportRecord,
   type StatementPreview,
 } from '../services/statement-import.service';
 import { brDate, money } from '../utils/format';
@@ -24,6 +26,9 @@ export function BankStatementImportPage() {
   const [previewing, setPreviewing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [deleting, setDeleting] = useState<StatementImportRecord | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletingImport, setDeletingImport] = useState(false);
 
   const { data: history, loading, error, reload } = useAsyncData(
     () => statementImportService.listImports(),
@@ -74,6 +79,29 @@ export function BankStatementImportPage() {
       });
     } finally {
       setImporting(false);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setDeletingImport(true);
+    setToast(null);
+    try {
+      const result = await statementImportService.remove(deleting.id, deletePassword);
+      setToast({
+        message: `${result.message} (${result.entriesRemoved} lançamentos removidos).`,
+        type: 'success',
+      });
+      setDeleting(null);
+      setDeletePassword('');
+      await reload();
+    } catch (err) {
+      setToast({
+        message: formatAxiosError(err, 'Não foi possível excluir o extrato.'),
+        type: 'error',
+      });
+    } finally {
+      setDeletingImport(false);
     }
   }
 
@@ -211,9 +239,23 @@ export function BankStatementImportPage() {
                     {new Date(row.createdAt).toLocaleString('pt-BR')}
                   </p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                  {row.format}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                    {row.format}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-9 px-3 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    onClick={() => {
+                      setDeleting(row);
+                      setDeletePassword('');
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Excluir
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
@@ -233,6 +275,59 @@ export function BankStatementImportPage() {
       </div>
 
       <Toast message={toast?.message ?? null} type={toast?.type} />
+
+      <Modal
+        open={!!deleting}
+        title="Excluir extrato importado"
+        onClose={() => {
+          if (deletingImport) return;
+          setDeleting(null);
+          setDeletePassword('');
+        }}
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (deletePassword.length >= 8) void confirmDelete();
+          }}
+        >
+          <p className="text-sm text-slate-600">
+            Para excluir o extrato <strong>{deleting?.fileName}</strong> (
+            {deleting?.bankLabel ?? deleting?.bank}, meses {deleting?.monthsCovered.join(', ')}) e
+            todos os lançamentos importados dele, confirme sua senha.
+          </p>
+          <Input
+            label="Senha"
+            type="password"
+            value={deletePassword}
+            autoComplete="current-password"
+            onChange={(e) => setDeletePassword(e.target.value)}
+          />
+          <div className="flex justify-end gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deletingImport}
+              onClick={() => {
+                setDeleting(null);
+                setDeletePassword('');
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              variant="danger"
+              loading={deletingImport}
+              disabled={deletePassword.length < 8}
+            >
+              <Trash2 className="h-4 w-4" />
+              Excluir extrato
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

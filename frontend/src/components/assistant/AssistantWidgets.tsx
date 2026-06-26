@@ -1,9 +1,14 @@
+import { useState } from 'react';
 import {
   AlertTriangle,
+  ArrowDownLeft,
+  ArrowUpRight,
   Brain,
   CheckCircle2,
+  Landmark,
   Lightbulb,
   Minus,
+  PiggyBank,
   Sparkles,
   TrendingDown,
   TrendingUp,
@@ -18,18 +23,21 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { money } from '../../utils/format';
+import { brDate, money } from '../../utils/format';
 import type {
   AssistantOverview,
+  BankSpendingAnalysis,
+  BankStatementAnalysis,
   ChallengeProgress,
   HabitsScore,
-  HealthObservation,
   HealthScore,
   InsightChallenge,
   InsightPriority,
   InvestmentAnalysis,
-  MicroExpense,
 } from '../../services/insights.service';
+import { TeachExpenseModal } from './TeachExpenseModal';
+import { RotatingInsightCards } from './RotatingInsightCards';
+import type { FinanceContextRule } from '../../services/finance-context.service';
 
 const PRIORITY_LABEL: Record<InsightPriority, string> = {
   HIGH: 'Alta',
@@ -113,36 +121,6 @@ export function AssistantHeader({ overview }: { overview: AssistantOverview }) {
   );
 }
 
-const OBSERVATION_STYLE: Record<
-  HealthObservation['tone'],
-  { border: string; bg: string; icon: typeof CheckCircle2; iconCls: string }
-> = {
-  POSITIVE: {
-    border: 'border-emerald-200',
-    bg: 'bg-emerald-50',
-    icon: CheckCircle2,
-    iconCls: 'text-emerald-600',
-  },
-  ATTENTION: {
-    border: 'border-amber-200',
-    bg: 'bg-amber-50',
-    icon: AlertTriangle,
-    iconCls: 'text-amber-600',
-  },
-  CRITICAL: {
-    border: 'border-red-200',
-    bg: 'bg-red-50',
-    icon: AlertTriangle,
-    iconCls: 'text-red-600',
-  },
-  INFO: {
-    border: 'border-slate-200',
-    bg: 'bg-slate-50',
-    icon: Lightbulb,
-    iconCls: 'text-slate-600',
-  },
-};
-
 function trendLabel(trend: HealthScore['trend'], delta: number) {
   if (trend === 'UP') return `Melhorou ${delta} pts vs mês anterior`;
   if (trend === 'DOWN') return `Caiu ${Math.abs(delta)} pts vs mês anterior`;
@@ -196,35 +174,7 @@ export function HealthScoreCard({ score }: { score: HealthScore }) {
           {score.summary}
         </p>
 
-        <div className="space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            O que observamos nos seus dados
-          </p>
-          {score.observations.map((obs) => {
-            const style = OBSERVATION_STYLE[obs.tone];
-            const Icon = style.icon;
-            return (
-              <article
-                key={obs.id}
-                className={`rounded-xl border p-4 ${style.border} ${style.bg}`}
-              >
-                <div className="flex gap-3">
-                  <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${style.iconCls}`} />
-                  <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-slate-950">{obs.title}</h3>
-                    <p className="mt-1.5 text-sm leading-relaxed text-slate-700">{obs.message}</p>
-                    {obs.tip && (
-                      <p className="mt-2 text-xs font-medium text-slate-600">
-                        <span className="font-semibold text-slate-800">Sugestão: </span>
-                        {obs.tip}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        <RotatingInsightCards observations={score.observations} />
       </div>
     </section>
   );
@@ -440,39 +390,6 @@ export function ChallengesPanel({ challenges }: { challenges: InsightChallenge[]
   );
 }
 
-export function MicroExpensesPanel({ items }: { items: MicroExpense[] }) {
-  if (items.length === 0) {
-    return (
-      <p className="text-sm text-slate-500">
-        Nenhum gasto pequeno recorrente identificado nos últimos meses.
-      </p>
-    );
-  }
-
-  return (
-    <ul className="space-y-2">
-      {items.map((item) => (
-        <li
-          key={item.id}
-          className="flex items-start justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3"
-        >
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-slate-950">{item.title}</p>
-            <p className="text-xs text-slate-500">
-              {item.category} · {item.occurrences}x · média {money(item.amount)}
-            </p>
-            <p className="mt-1 text-xs text-amber-800">{item.insight}</p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-sm font-bold text-red-700">{money(item.annualImpact)}</p>
-            <p className="text-[11px] text-slate-500">/ ano</p>
-          </div>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function HabitsCard({ habits }: { habits: HabitsScore }) {
   const data = [{ name: 'Hábitos', value: habits.value, rest: 100 - habits.value }];
   return (
@@ -523,6 +440,291 @@ export function HabitsCard({ habits }: { habits: HabitsScore }) {
           </ul>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+function normalizeLabel(text: string): string {
+  return text
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .trim();
+}
+
+function findRuleForMerchant(
+  rules: FinanceContextRule[],
+  merchant: string,
+  matchLabel?: string,
+): FinanceContextRule | undefined {
+  const keys = [matchLabel, normalizeLabel(merchant)].filter(Boolean) as string[];
+  return rules.find((r) =>
+    keys.some(
+      (k) => k === r.matchLabel || k.includes(r.matchLabel) || r.matchLabel.includes(k),
+    ),
+  );
+}
+
+function SpendingAnalysisSection({
+  spend,
+  contextRules,
+  onContextSaved,
+}: {
+  spend: BankSpendingAnalysis;
+  contextRules: FinanceContextRule[];
+  onContextSaved?: () => void;
+}) {
+  const [teachTarget, setTeachTarget] = useState<{
+    merchant: string;
+    category: string;
+    matchLabel?: string;
+  } | null>(null);
+
+  const existingRule = teachTarget
+    ? findRuleForMerchant(contextRules, teachTarget.merchant, teachTarget.matchLabel)
+    : null;
+
+  return (
+    <div className="space-y-4 rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50 to-white p-4">
+      <p className="flex items-center gap-2 text-sm font-semibold text-orange-950">
+        <TrendingDown className="h-4 w-4" />
+        Análise de gastos do extrato
+      </p>
+
+      {spend.spentMoreThanEarned && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+          <p className="font-semibold">
+            Déficit de {money(spend.overspendAmount)} no mês
+          </p>
+          {spend.deficitReason && <p className="mt-1">{spend.deficitReason}</p>}
+        </div>
+      )}
+
+      {spend.topCategories.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase text-slate-500">Onde mais gastou</p>
+          <ul className="mt-2 space-y-2">
+            {spend.topCategories.slice(0, 5).map((cat) => (
+              <li
+                key={cat.category}
+                className="flex items-center justify-between rounded-lg border border-white bg-white/80 px-3 py-2 text-sm"
+              >
+                <span className="font-medium text-slate-800">{cat.category}</span>
+                <span className="text-right">
+                  <span className="font-bold text-red-700">{money(cat.total)}</span>
+                  <span className="ml-2 text-xs text-slate-500">
+                    {cat.sharePercent.toFixed(0)}% · {cat.count}x
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {spend.expenseDetails.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase text-slate-500">Detalhamento dos gastos</p>
+          <ul className="mt-2 max-h-72 space-y-1.5 overflow-y-auto">
+            {spend.expenseDetails.map((item, i) => (
+              <li
+                key={`${item.date}-${item.merchant}-${i}`}
+                className="flex items-start justify-between gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-900">{item.detail}</p>
+                  <p className="text-xs text-slate-500">
+                    {item.userMotive ? (
+                      <>
+                        <span className="rounded bg-[#103B73]/8 px-1.5 py-0.5 text-[10px] font-medium text-[#103B73]">
+                          {item.category}
+                        </span>
+                        {' · '}
+                        {brDate(item.date)}
+                        {item.isRecurring ? ' · recorrente' : ''}
+                      </>
+                    ) : (
+                      <>
+                        {brDate(item.date)}
+                        {item.isRecurring ? ' · recorrente' : ''}
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTeachTarget({
+                        merchant: item.merchant,
+                        category: item.category,
+                        matchLabel: item.matchLabel,
+                      })
+                    }
+                    className="rounded-md border border-[#103B73]/20 px-2 py-1 text-[10px] font-semibold uppercase text-[#103B73] hover:bg-[#103B73]/5"
+                  >
+                    {item.userMotive ? 'Editar' : 'Ensinar'}
+                  </button>
+                  <span className="font-semibold text-red-700">{money(item.amount)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {spend.actions.length > 0 && (
+        <div className="rounded-lg border border-[#103B73]/20 bg-[#103B73]/5 p-3">
+          <p className="flex items-center gap-1.5 text-xs font-semibold uppercase text-[#103B73]">
+            <Lightbulb className="h-3.5 w-3.5" />
+            O que fazer
+          </p>
+          <ol className="mt-2 space-y-2">
+            {spend.actions.map((action, i) => (
+              <li key={i} className="flex gap-2 text-sm text-slate-800">
+                <span className="font-bold text-[#103B73]">{i + 1}.</span>
+                <span>{action}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      <TeachExpenseModal
+        open={!!teachTarget}
+        merchant={teachTarget?.merchant ?? ''}
+        defaultCategory={teachTarget?.category}
+        existingRule={existingRule}
+        onClose={() => setTeachTarget(null)}
+        onSaved={() => onContextSaved?.()}
+      />
+    </div>
+  );
+}
+
+export function BankAnalysisPanel({
+  analysis,
+  contextRules = [],
+  onContextSaved,
+}: {
+  analysis: BankStatementAnalysis;
+  contextRules?: FinanceContextRule[];
+  onContextSaved?: () => void;
+}) {
+  const ref = analysis.referenceMonthBreakdown;
+
+  return (
+    <div className="space-y-4">
+      {!analysis.hasData ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-600">
+          <p className="font-semibold text-slate-800">Importe seu extrato bancário</p>
+          <p className="mt-1">
+            A IA analisa entradas, saídas e gastos reais — separados de investimentos no RDB.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <Landmark className="h-4 w-4" />
+            <span>
+              {analysis.banks.join(', ')} · {analysis.totalMovements} movimentações ·{' '}
+              {analysis.monthsCovered.length} mês(es)
+            </span>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SummaryStat
+              label="Entradas (mês ref.)"
+              value={money(ref?.totalIn ?? 0)}
+              tone="good"
+            />
+            <SummaryStat
+              label="Saídas (mês ref.)"
+              value={money(ref?.totalOut ?? 0)}
+              tone="danger"
+            />
+            <SummaryStat
+              label="Investido no RDB"
+              value={money(analysis.currentlyInvested)}
+              tone="good"
+            />
+          </div>
+
+          {analysis.spendingAnalysis && (
+            <SpendingAnalysisSection
+              spend={analysis.spendingAnalysis}
+              contextRules={contextRules}
+              onContextSaved={onContextSaved}
+            />
+          )}
+
+          {(analysis.movementSummary.length > 0 || analysis.recommendations.length > 0) && (
+            <div className="rounded-xl border border-[#103B73]/15 bg-gradient-to-br from-slate-50 to-white p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-[#071A3D]">
+                <PiggyBank className="h-4 w-4" />
+                Investimentos e fluxo
+              </p>
+              <ul className="mt-2 space-y-1.5 text-sm text-slate-700">
+                {analysis.movementSummary.map((line) => (
+                  <li key={line} className="flex gap-2">
+                    <span className="text-[#103B73]">•</span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+                {analysis.recommendations.map((tip) => (
+                  <li key={tip} className="flex gap-2 font-medium text-[#103B73]">
+                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    <span>{tip}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {analysis.monthlyBreakdown.length > 1 && (
+            <details className="rounded-xl border border-slate-200">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-slate-800">
+                Ver histórico mês a mês
+              </summary>
+              <div className="overflow-x-auto border-t border-slate-100">
+                <table className="w-full min-w-[640px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+                    <tr>
+                      <th className="px-3 py-2">Mês</th>
+                      <th className="px-3 py-2 text-right">Entradas</th>
+                      <th className="px-3 py-2 text-right">Saídas</th>
+                      <th className="px-3 py-2 text-right">Aplicado</th>
+                      <th className="px-3 py-2 text-right">Resgatado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {analysis.monthlyBreakdown.map((row) => (
+                      <tr key={row.month} className="border-t border-slate-100">
+                        <td className="px-3 py-2 font-medium capitalize">{monthLabel(row.month)}</td>
+                        <td className="px-3 py-2 text-right text-emerald-700">
+                          <span className="inline-flex items-center gap-1">
+                            <ArrowDownLeft className="h-3.5 w-3.5" />
+                            {money(row.totalIn)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right text-red-700">
+                          <span className="inline-flex items-center gap-1">
+                            <ArrowUpRight className="h-3.5 w-3.5" />
+                            {money(row.totalOut)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-right">{money(row.investedApplied)}</td>
+                        <td className="px-3 py-2 text-right">{money(row.investedRedeemed)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
+        </>
+      )}
     </div>
   );
 }

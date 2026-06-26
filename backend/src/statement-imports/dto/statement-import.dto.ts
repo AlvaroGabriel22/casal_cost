@@ -1,5 +1,5 @@
 import { DetectedBank } from '@prisma/client';
-import { IsEnum, IsOptional } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class StatementImportQueryDto {
   @IsOptional()
@@ -14,4 +14,10 @@ export class StatementBankHintDto {
   @IsOptional()
   @IsEnum(DetectedBank)
   bank?: DetectedBank;
+}
+
+export class DeleteStatementImportDto {
+  @IsString()
+  @MinLength(8)
+  password: string;
 }

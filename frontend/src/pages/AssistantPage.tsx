@@ -8,11 +8,11 @@ import { useAsyncData } from '../hooks/useAsyncData';
 import { insightsService } from '../services/insights.service';
 import {
   AssistantHeader,
+  BankAnalysisPanel,
   ChallengesPanel,
   HabitsCard,
   HealthScoreCard,
   InvestmentPanel,
-  MicroExpensesPanel,
 } from '../components/assistant/AssistantWidgets';
 
 export function AssistantPage() {
@@ -96,20 +96,23 @@ export function AssistantPage() {
         <ChallengesPanel challenges={data.challenges} />
       </Card>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Card
-          title="Gastos pequenos que passam despercebidos"
-          subtitle="Valores baixos por lançamento, mas relevantes no acumulado anual."
-        >
-          <MicroExpensesPanel items={data.microExpenses} />
-        </Card>
-        <Card
-          title="Score de hábitos financeiros"
-          subtitle="Disciplina de aportes, controle de despesas e consistência mensal."
-        >
-          <HabitsCard habits={data.habits} />
-        </Card>
-      </div>
+      <Card
+        title="Score de hábitos financeiros"
+        subtitle="Disciplina de aportes, controle de despesas e consistência mensal."
+      >
+        <HabitsCard habits={data.habits} />
+      </Card>
+
+      <Card
+        title="Análise do extrato bancário"
+        subtitle="IA lê todas as movimentações importadas — entradas, saídas, investimentos e resgates entre meses."
+      >
+        <BankAnalysisPanel
+          analysis={data.bankAnalysis}
+          contextRules={data.financeContext.rules}
+          onContextSaved={reload}
+        />
+      </Card>
     </div>
   );
 }

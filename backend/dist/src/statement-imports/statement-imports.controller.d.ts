@@ -1,7 +1,7 @@
 import { UploadedFile } from '@nestjs/common';
 import type { AuthUser } from '../auth/current-user.decorator';
 import { StatementImportsService } from './statement-imports.service';
-import { StatementBankHintDto, StatementImportQueryDto } from './dto/statement-import.dto';
+import { DeleteStatementImportDto, StatementBankHintDto, StatementImportQueryDto } from './dto/statement-import.dto';
 type UploadedFile = {
     buffer: Buffer;
     originalname: string;
@@ -80,6 +80,19 @@ export declare class StatementImportsController {
             fileName: string;
             imported: number;
             monthsCovered: string[];
+            message: string;
+        };
+        message: string;
+    }>;
+    delete(user: AuthUser, id: string, dto: DeleteStatementImportDto): Promise<{
+        success: true;
+        data: {
+            importId: string;
+            fileName: string;
+            bank: import(".prisma/client").$Enums.DetectedBank;
+            bankLabel: string;
+            monthsCovered: string[];
+            entriesRemoved: number;
             message: string;
         };
         message: string;

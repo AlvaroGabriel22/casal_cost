@@ -1,22 +1,30 @@
 import { PrismaService } from '../prisma/prisma.service';
 import { FinancialCalculationService } from '../financial/financial-calculation.service';
 import { AiService } from '../ai/ai.service';
+import { BankStatementAnalysisService } from '../insights/bank-statement-analysis.service';
+import { FinanceContextService } from '../finance-context/finance-context.service';
 export declare class FinanceRagService {
     private readonly prisma;
     private readonly financial;
     private readonly ai;
+    private readonly bankAnalysis;
+    private readonly financeContext;
     private readonly logger;
-    constructor(prisma: PrismaService, financial: FinancialCalculationService, ai: AiService);
+    constructor(prisma: PrismaService, financial: FinancialCalculationService, ai: AiService, bankAnalysis: BankStatementAnalysisService, financeContext: FinanceContextService);
     private brl;
     private ym;
     private ymd;
     private currentYm;
     private addMonths;
+    private merchantFromDescription;
+    private isBankStatementQuery;
     private getActiveCoupleId;
     private computeSignature;
     private buildDocuments;
     reindex(userId: string): Promise<number>;
     ensureIndex(userId: string): Promise<void>;
     retrieve(userId: string, queryEmbedding: number[], k?: number): Promise<string[]>;
+    retrieveForChat(userId: string, queryEmbedding: number[], query: string): Promise<string[]>;
+    buildBankStatementContext(userId: string): Promise<string>;
     buildLiveSummary(userId: string): Promise<string>;
 }

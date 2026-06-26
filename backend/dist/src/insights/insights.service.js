@@ -16,29 +16,36 @@ const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const financial_calculation_service_1 = require("../financial/financial-calculation.service");
 const investments_service_1 = require("../investments/investments.service");
+const bank_statement_analysis_service_1 = require("./bank-statement-analysis.service");
+const finance_context_service_1 = require("../finance-context/finance-context.service");
 let InsightsService = InsightsService_1 = class InsightsService {
-    constructor(prisma, calc, investments) {
+    constructor(prisma, calc, investments, bankAnalysis, financeContext) {
         this.prisma = prisma;
         this.calc = calc;
         this.investments = investments;
+        this.bankAnalysis = bankAnalysis;
+        this.financeContext = financeContext;
         this.logger = new common_1.Logger(InsightsService_1.name);
     }
     async buildOverview(userId, monthYm) {
         const reference = this.normaliseMonth(monthYm);
         const historyMonths = 12;
         const months = this.lastMonths(reference, historyMonths);
+        const contextRules = await this.financeContext.listRules(userId);
         const [snapshots, transactionCount, activeInstallments, investments] = await Promise.all([
             Promise.all(months.map((ym) => this.snapshotMonth(userId, ym))),
             this.countTransactions(userId, months),
             this.activeInstallmentsForUser(userId),
             this.loadInvestmentAnalysis(userId, reference, months),
         ]);
+        const bankAnalysis = await this.bankAnalysis.analyze(userId, reference, contextRules);
+        const financeContext = await this.financeContext.getPayload(userId);
         const hasEnoughData = snapshots.some((m) => m.expenses > 0 || m.income > 0) &&
             transactionCount >= 3;
         const categoryTrends = this.computeCategoryTrends(snapshots);
         const current = snapshots[snapshots.length - 1];
-        const healthScore = this.computeHealthScore(snapshots, activeInstallments, investments);
-        const habits = this.computeHabits(snapshots, categoryTrends, investments);
+        const healthScore = this.computeHealthScore(snapshots, activeInstallments, investments, bankAnalysis);
+        const habits = this.computeHabits(snapshots, categoryTrends, investments, bankAnalysis);
         const microExpenses = await this.detectMicroExpenses(userId, months.slice(-3));
         const challenges = this.composeChallenges({
             snapshots,
@@ -58,6 +65,8 @@ let InsightsService = InsightsService_1 = class InsightsService {
             healthScore,
             investments,
             habits,
+            bankAnalysis,
+            financeContext,
             challenges,
             microExpenses,
             insights,
@@ -98,7 +107,7 @@ let InsightsService = InsightsService_1 = class InsightsService {
             status: 'POSITIVE',
         };
     }
-    computeHealthScore(snapshots, installments, investments) {
+    computeHealthScore(snapshots, installments, investments, bankAnalysis) {
         const recent = snapshots.slice(-6).filter((s) => s.income > 0 || s.expenses > 0);
         const avgIncome = this.avg(recent.map((s) => s.income));
         const avgExpense = this.avg(recent.map((s) => s.expenses));
@@ -198,27 +207,8 @@ let InsightsService = InsightsService_1 = class InsightsService {
         const previousValue = history.length >= 2 ? history[history.length - 2].value : value;
         const delta = value - previousValue;
         const trend = delta > 2 ? 'UP' : delta < -2 ? 'DOWN' : 'STABLE';
-        const positiveMonths = recent.filter((s) => s.balance >= 0).length;
-        const { summary, observations } = this.composeHealthObservations({
-            recent,
-            current: snapshots[snapshots.length - 1],
-            avgIncome,
-            avgExpense,
-            avgBalance,
-            reserveMonths,
-            expensesRatio,
-            debtRatio,
-            investmentRate,
-            targetRate,
-            expenseStability,
-            cashflowConsistency,
-            positiveMonths,
-            value,
-            delta,
-            trend,
-            installments,
-            investments,
-        });
+        const observations = this.bankAnalysis.buildHealthObservations(bankAnalysis);
+        const summary = this.bankAnalysis.buildHealthSummary(Math.round(this.clamp(value / 100) * 100), delta, trend, bankAnalysis);
         return {
             value: Math.round(this.clamp(value / 100) * 100),
             delta,
@@ -227,247 +217,6 @@ let InsightsService = InsightsService_1 = class InsightsService {
             summary,
             observations,
         };
-    }
-    composeHealthObservations(input) {
-        const observations = [];
-        const { recent, current, avgIncome, avgExpense, reserveMonths, expensesRatio, debtRatio, investmentRate, targetRate, expenseStability, cashflowConsistency, positiveMonths, value, delta, trend, installments, investments, } = input;
-        if (recent.length === 0) {
-            return {
-                summary: 'Ainda não temos dados suficientes. Cadastre receitas e despesas para a análise começar.',
-                observations: [
-                    {
-                        id: 'health-no-data',
-                        tone: 'INFO',
-                        title: 'Comece registrando seu mês',
-                        message: 'Com receitas e despesas lançadas, conseguimos explicar sua situação em linguagem simples e apontar o que merece atenção.',
-                        tip: 'Cadastre pelo menos o salário e as contas fixas do mês atual.',
-                    },
-                ],
-            };
-        }
-        const expensePct = Math.round(expensesRatio * 100);
-        const investmentPct = Math.round(investmentRate * 100);
-        const targetPct = Math.round(targetRate * 100);
-        if (current.balance < 0) {
-            observations.push({
-                id: 'health-negative-month',
-                tone: 'CRITICAL',
-                title: 'Este mês está no vermelho',
-                message: `Suas despesas superaram as receitas em ${this.brl(Math.abs(current.balance))} neste mês. Antes de investir ou assumir novos gastos, o ideal é recuperar esse saldo.`,
-                tip: 'Revise contas pendentes e adie compras não essenciais até voltar ao positivo.',
-            });
-        }
-        else if (current.balance > 0 && current.income > 0) {
-            const savedPct = Math.round((current.balance / current.income) * 100);
-            observations.push({
-                id: 'health-month-balance',
-                tone: savedPct >= 15 ? 'POSITIVE' : 'INFO',
-                title: savedPct >= 15
-                    ? 'Bom! Sobrou dinheiro este mês'
-                    : 'Saldo positivo, mas apertado',
-                message: savedPct >= 15
-                    ? `Você terminou o mês com ${this.brl(current.balance)} sobrando — cerca de ${savedPct}% da sua renda. Isso ajuda a formar reserva e fazer aportes.`
-                    : `Sobrou ${this.brl(current.balance)} este mês (${savedPct}% da renda). Positivo, mas uma margem maior traria mais tranquilidade.`,
-                tip: savedPct >= 15
-                    ? 'Considere destinar parte desse valor a investimentos ou reserva.'
-                    : 'Tente reduzir um gasto variável para aumentar a sobra no próximo mês.',
-            });
-        }
-        if (expensesRatio > 0.9) {
-            observations.push({
-                id: 'health-high-expenses',
-                tone: 'CRITICAL',
-                title: 'Gastos muito altos em relação à renda',
-                message: `Em média, ${expensePct}% da sua renda vai para despesas. Quando passa de 90%, sobra pouco ou nada para imprevistos e investimentos.`,
-                tip: 'Identifique 1 ou 2 categorias para cortar ainda neste mês — veja os desafios abaixo.',
-            });
-        }
-        else if (expensesRatio > 0.75) {
-            observations.push({
-                id: 'health-elevated-expenses',
-                tone: 'ATTENTION',
-                title: 'Despesas consumindo boa parte da renda',
-                message: `Cerca de ${expensePct}% da renda está indo em despesas. O confortável costuma ser abaixo de 75%.`,
-                tip: 'Confira se há assinaturas ou gastos pequenos repetidos que dá para eliminar.',
-            });
-        }
-        else if (expensesRatio <= 0.65 && avgIncome > 0) {
-            observations.push({
-                id: 'health-good-expenses',
-                tone: 'POSITIVE',
-                title: 'Despesas sob controle',
-                message: `Você usa cerca de ${expensePct}% da renda com despesas — uma proporção saudável que deixa margem para poupar.`,
-            });
-        }
-        if (avgExpense > 0) {
-            if (reserveMonths < 1 && avgIncome > 0) {
-                observations.push({
-                    id: 'health-no-reserve',
-                    tone: 'CRITICAL',
-                    title: 'Sem margem de segurança',
-                    message: `Com o saldo médio recente (${this.brl(Math.max(input.avgBalance, 0))}), você cobriria menos de 1 mês de despesas (${this.brl(avgExpense)}/mês). Imprevistos podem virar dívidas.`,
-                    tip: 'Priorize juntar o equivalente a 1 salário antes de gastos extras.',
-                });
-            }
-            else if (reserveMonths < 3) {
-                observations.push({
-                    id: 'health-low-reserve',
-                    tone: 'ATTENTION',
-                    title: 'Reserva ainda curta',
-                    message: `Seu saldo médio cobriria cerca de ${reserveMonths.toFixed(1)} mês(es) de despesas. Especialistas recomendam pelo menos 3 a 6 meses.`,
-                    tip: 'Destine parte da sobra mensal para aumentar essa reserva gradualmente.',
-                });
-            }
-            else if (reserveMonths >= 6) {
-                observations.push({
-                    id: 'health-strong-reserve',
-                    tone: 'POSITIVE',
-                    title: 'Reserva de emergência sólida',
-                    message: `Com o saldo médio atual, você teria cerca de ${reserveMonths.toFixed(1)} meses de despesas cobertos — excelente proteção contra imprevistos.`,
-                });
-            }
-        }
-        const ind = investments.individual;
-        if (!ind.hasRegisteredContributions) {
-            observations.push({
-                id: 'health-no-investment',
-                tone: 'ATTENTION',
-                title: 'Nenhum aporte registrado',
-                message: 'Não encontramos aportes individuais cadastrados. A IA só analisa o que você registra na tela de Investimentos.',
-                tip: 'Quando investir, informe o valor e o mês — mesmo aportes pequenos contam.',
-            });
-        }
-        else if (investmentPct < targetPct * 0.5) {
-            observations.push({
-                id: 'health-low-investment',
-                tone: 'ATTENTION',
-                title: 'Aportes abaixo do ideal',
-                message: `Você investe cerca de ${investmentPct}% da renda individualmente (média ${this.brl(ind.averageMonthly)}/mês). A meta sugerida é ${targetPct}%.`,
-                tip: `Tente registrar pelo menos ${this.brl(Math.max((targetPct / 100) * avgIncome - ind.monthTotal, 50))} a mais neste mês.`,
-            });
-        }
-        else if (investmentPct >= targetPct) {
-            observations.push({
-                id: 'health-good-investment',
-                tone: 'POSITIVE',
-                title: 'Aportes individuais em dia',
-                message: `Você investe cerca de ${investmentPct}% da renda (${this.brl(ind.monthTotal)} neste mês, ${this.brl(ind.allTimeTotal)} acumulado).`,
-            });
-        }
-        else {
-            observations.push({
-                id: 'health-moderate-investment',
-                tone: 'INFO',
-                title: 'Aportes no caminho certo',
-                message: `Investimento individual de ${investmentPct}% da renda — abaixo da meta de ${targetPct}%, mas já é um hábito formado (${ind.consecutiveMonths} mês(es) seguidos).`,
-                tip: 'Aumente aos poucos, mês a mês, até chegar na meta.',
-            });
-        }
-        const couple = investments.couple;
-        if (couple?.hasRegisteredContributions) {
-            const partners = couple.byPartner
-                ?.filter((p) => p.monthAmount > 0)
-                .map((p) => `${p.name}: ${this.brl(p.monthAmount)}`)
-                .join(' · ') ?? '';
-            observations.push({
-                id: 'health-couple-investment',
-                tone: 'INFO',
-                title: 'Investimento conjunto do casal',
-                message: `Total conjunto: ${this.brl(couple.monthTotal)} neste mês (${this.brl(couple.allTimeTotal)} acumulado).${partners ? ` ${partners}.` : ''} Ambos os parceiros veem o mesmo total.`,
-            });
-        }
-        if (installments.totalPending > 0 && avgIncome > 0) {
-            const monthsOfSalary = installments.totalPending / avgIncome;
-            if (debtRatio > 0.3 || monthsOfSalary > 4) {
-                observations.push({
-                    id: 'health-high-debt',
-                    tone: 'CRITICAL',
-                    title: 'Parcelas pesando no orçamento',
-                    message: `Há ${this.brl(installments.totalPending)} em parcelas pendentes — equivalente a ${monthsOfSalary.toFixed(1)} meses de renda. Isso limita sua flexibilidade.`,
-                    tip: 'Evite novos parcelamentos até reduzir esse valor.',
-                });
-            }
-            else if (installments.totalPending > avgIncome * 0.5) {
-                observations.push({
-                    id: 'health-moderate-debt',
-                    tone: 'ATTENTION',
-                    title: 'Parcelas ativas no radar',
-                    message: `${this.brl(installments.totalPending)} ainda em parcelas (${installments.activeGroups} compra(s) parcelada(s)). Fique atento para não acumular.`,
-                });
-            }
-        }
-        if (recent.length >= 3) {
-            if (cashflowConsistency < 0.5) {
-                observations.push({
-                    id: 'health-bad-cashflow',
-                    tone: 'ATTENTION',
-                    title: 'Meses negativos se repetindo',
-                    message: `Dos últimos ${recent.length} meses, apenas ${positiveMonths} fecharam no positivo. Vale entender o que está puxando o saldo para baixo.`,
-                    tip: 'Compare os meses no dashboard e note em quais categorias os gastos subiram.',
-                });
-            }
-            else if (cashflowConsistency >= 0.8 && positiveMonths >= 3) {
-                observations.push({
-                    id: 'health-good-cashflow',
-                    tone: 'POSITIVE',
-                    title: 'Consistência nos meses positivos',
-                    message: `${positiveMonths} de ${recent.length} meses recentes terminaram com saldo positivo — sinal de controle financeiro.`,
-                });
-            }
-        }
-        if (recent.length >= 4 && expenseStability < 0.45) {
-            const highest = [...recent].sort((a, b) => b.expenses - a.expenses)[0];
-            const lowest = [...recent].sort((a, b) => a.expenses - b.expenses)[0];
-            observations.push({
-                id: 'health-unstable-expenses',
-                tone: 'ATTENTION',
-                title: 'Gastos variando bastante',
-                message: `Suas despesas oscilaram entre ${this.brl(lowest.expenses)} e ${this.brl(highest.expenses)} nos últimos meses. Variação alta dificulta planejar.`,
-                tip: 'Gastos fixos e pequenos hábitos diários costumam ser os culpados — confira a lista de micro-gastos.',
-            });
-        }
-        if (trend === 'UP' && delta >= 5) {
-            observations.push({
-                id: 'health-score-up',
-                tone: 'POSITIVE',
-                title: 'Sua saúde financeira melhorou',
-                message: `O score subiu ${delta} pontos em relação ao mês anterior. Continue o que está funcionando.`,
-            });
-        }
-        else if (trend === 'DOWN' && delta <= -5) {
-            observations.push({
-                id: 'health-score-down',
-                tone: 'ATTENTION',
-                title: 'Score caiu em relação ao mês passado',
-                message: `Sua saúde financeira recuou ${Math.abs(delta)} pontos. Veja as observações acima para entender o que mudou.`,
-            });
-        }
-        const toneOrder = {
-            CRITICAL: 0,
-            ATTENTION: 1,
-            INFO: 2,
-            POSITIVE: 3,
-        };
-        observations.sort((a, b) => toneOrder[a.tone] - toneOrder[b.tone]);
-        const picked = observations.slice(0, 6);
-        let summary;
-        if (value >= 75) {
-            summary = `Sua saúde financeira está em ${value}/100 — situação sólida.`;
-        }
-        else if (value >= 50) {
-            summary = `Sua saúde financeira está em ${value}/100 — equilíbrio razoável, com pontos a ajustar.`;
-        }
-        else {
-            summary = `Sua saúde financeira está em ${value}/100 — priorize cortes e reserva antes de novos compromissos.`;
-        }
-        if (trend === 'UP' && delta > 2) {
-            summary += ` Melhorou ${delta} pts vs mês anterior.`;
-        }
-        else if (trend === 'DOWN' && delta < -2) {
-            summary += ` Caiu ${Math.abs(delta)} pts vs mês anterior.`;
-        }
-        summary += ' Leia as observações abaixo — são personalizadas com base nos seus dados.';
-        return { summary, observations: picked };
     }
     scoreForSlice(slice, installments, investments) {
         const recent = slice.slice(-6).filter((s) => s.income > 0 || s.expenses > 0);
@@ -1102,7 +851,7 @@ let InsightsService = InsightsService_1 = class InsightsService {
         }
         return { level, score: finalScore, reasons };
     }
-    computeHabits(snapshots, trends, investments) {
+    computeHabits(snapshots, trends, investments, bankAnalysis) {
         const recent = snapshots.slice(-6).filter((s) => s.income > 0 || s.expenses > 0);
         if (recent.length === 0) {
             return {
@@ -1118,7 +867,9 @@ let InsightsService = InsightsService_1 = class InsightsService {
         const reducingCount = trends.filter((t) => t.slopePercent <= -5).length;
         const investmentDiscipline = investments.individual.hasRegisteredContributions
             ? Math.min(investments.individual.consecutiveMonths / 6, 1)
-            : 0;
+            : bankAnalysis.hasData && bankAnalysis.totalAppliedAllTime > 0
+                ? Math.min(bankAnalysis.monthlyBreakdown.filter((m) => m.investedApplied > 0).length / 6, 1)
+                : 0;
         const value = Math.round(this.clamp(consistency * 0.3 +
             stability * 0.3 +
             investmentDiscipline * 0.25 +
@@ -1137,7 +888,12 @@ let InsightsService = InsightsService_1 = class InsightsService {
             positives.push(`Investiu individualmente por ${investments.individual.consecutiveMonths} meses seguidos (${this.brl(investments.individual.averageMonthly)}/mês em média).`);
         }
         else if (!investments.individual.hasRegisteredContributions) {
-            attentions.push('Nenhum aporte individual registrado. Use a tela Investimentos → Individual.');
+            if (bankAnalysis.hasData && bankAnalysis.totalAppliedAllTime > 0) {
+                positives.push(`Extrato detectou ${this.brl(bankAnalysis.totalAppliedAllTime)} aplicados em investimentos (RDB) — ${this.brl(bankAnalysis.currentlyInvested)} ainda investidos.`);
+            }
+            else {
+                attentions.push('Nenhum aporte individual registrado. Use a tela Investimentos → Individual ou importe extratos.');
+            }
         }
         else if (investments.individual.vsPreviousMonth < 0) {
             attentions.push(`Aportes individuais caíram ${this.brl(Math.abs(investments.individual.vsPreviousMonth))} em relação ao mês anterior.`);
@@ -1508,7 +1264,7 @@ let InsightsService = InsightsService_1 = class InsightsService {
             return 0;
         const min = this.calc.monthStart(months[0]);
         const max = this.calc.monthStart(months[months.length - 1]);
-        const [occurrences, incomes] = await Promise.all([
+        const [occurrences, incomes, bankEntries] = await Promise.all([
             this.prisma.expenseOccurrence.count({
                 where: {
                     deletedAt: null,
@@ -1526,8 +1282,15 @@ let InsightsService = InsightsService_1 = class InsightsService {
                     referenceMonth: { gte: min, lte: max },
                 },
             }),
+            this.prisma.bankStatementEntry.count({
+                where: {
+                    userId,
+                    deletedAt: null,
+                    referenceMonth: { gte: min, lte: max },
+                },
+            }),
         ]);
-        return occurrences + incomes;
+        return occurrences + incomes + bankEntries;
     }
     async activeInstallmentsForUser(userId) {
         const groups = await this.prisma.installmentGroup.findMany({
@@ -1642,6 +1405,8 @@ exports.InsightsService = InsightsService = InsightsService_1 = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         financial_calculation_service_1.FinancialCalculationService,
-        investments_service_1.InvestmentsService])
+        investments_service_1.InvestmentsService,
+        bank_statement_analysis_service_1.BankStatementAnalysisService,
+        finance_context_service_1.FinanceContextService])
 ], InsightsService);
 //# sourceMappingURL=insights.service.js.map

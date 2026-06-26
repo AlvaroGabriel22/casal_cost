@@ -43,6 +43,9 @@ let StatementImportsController = class StatementImportsController {
         }
         return this.imports.import(user.id, file.buffer, file.originalname, query.bank);
     }
+    delete(user, id, dto) {
+        return this.imports.deleteImport(user.id, id, dto.password);
+    }
 };
 exports.StatementImportsController = StatementImportsController;
 __decorate([
@@ -80,6 +83,15 @@ __decorate([
     __metadata("design:paramtypes", [Object, typeof (_b = typeof common_1.UploadedFile !== "undefined" && common_1.UploadedFile) === "function" ? _b : Object, statement_import_dto_1.StatementBankHintDto]),
     __metadata("design:returntype", void 0)
 ], StatementImportsController.prototype, "import", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Param)('id')),
+    __param(2, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String, statement_import_dto_1.DeleteStatementImportDto]),
+    __metadata("design:returntype", void 0)
+], StatementImportsController.prototype, "delete", null);
 exports.StatementImportsController = StatementImportsController = __decorate([
     (0, common_1.Controller)('statement-imports'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
