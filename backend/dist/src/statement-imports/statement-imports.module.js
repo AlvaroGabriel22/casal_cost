@@ -9,6 +9,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.StatementImportsModule = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_module_1 = require("../prisma/prisma.module");
+const financial_domain_module_1 = require("../financial/financial-domain.module");
 const statement_imports_controller_1 = require("./statement-imports.controller");
 const statement_imports_service_1 = require("./statement-imports.service");
 let StatementImportsModule = class StatementImportsModule {
@@ -16,7 +17,7 @@ let StatementImportsModule = class StatementImportsModule {
 exports.StatementImportsModule = StatementImportsModule;
 exports.StatementImportsModule = StatementImportsModule = __decorate([
     (0, common_1.Module)({
-        imports: [prisma_module_1.PrismaModule],
+        imports: [prisma_module_1.PrismaModule, financial_domain_module_1.FinancialDomainModule],
         controllers: [statement_imports_controller_1.StatementImportsController],
         providers: [statement_imports_service_1.StatementImportsService],
         exports: [statement_imports_service_1.StatementImportsService],
