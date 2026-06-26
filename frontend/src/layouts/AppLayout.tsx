@@ -3,6 +3,7 @@ import {
   Banknote,
   ChartPie,
   CreditCard,
+  FileUp,
   HandCoins,
   Heart,
   Home,
@@ -29,6 +30,7 @@ const nav = [
     items: [
       { to: '/dashboard/individual', label: 'Dashboard individual', icon: Home },
       { to: '/statement/individual', label: 'Extrato', icon: ReceiptText },
+      { to: '/statement/import', label: 'Importar extrato', icon: FileUp },
       { to: '/expenses/individual', label: 'Despesas individuais', icon: CreditCard },
       { to: '/installments', label: 'Parcelamentos', icon: Banknote },
       { to: '/investments/individual', label: 'Investimentos', icon: TrendingUp },
@@ -59,6 +61,7 @@ const nav = [
 const titles: Record<string, string> = {
   '/dashboard/individual': 'Dashboard individual',
   '/statement/individual': 'Extrato individual',
+  '/statement/import': 'Importar extrato bancário',
   '/dashboard/couple': 'Dashboard do casal',
   '/expenses/individual': 'Despesas individuais',
   '/expenses/couple': 'Despesas do casal',

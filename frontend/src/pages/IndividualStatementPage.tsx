@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CalendarDays, CreditCard, ReceiptText } from 'lucide-react';
+import { CalendarDays, CreditCard, FileUp, ReceiptText } from 'lucide-react';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Card, MetricCard } from '../components/ui/Card';
@@ -322,6 +322,62 @@ export function IndividualStatementPage() {
                         </td>
                         <td className="py-3 text-right text-slate-500">
                           {item.source === 'SHARED' ? money(item.originalAmount) : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {data.bankItems && data.bankItems.length > 0 && filters.source !== 'SHARED' && (
+            <Card
+              title="Lançamentos do extrato bancário"
+              subtitle={`Importados automaticamente · saídas ${money(data.bankDebitTotal ?? 0)}`}
+            >
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-500">
+                  Detalhes do cartão/conta importados via CSV ou OFX. Não substituem despesas
+                  cadastradas manualmente.
+                </p>
+                <Link
+                  to="/statement/import"
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-300 px-3 py-1.5 text-xs font-semibold text-[#071A3D] hover:bg-slate-50"
+                >
+                  <FileUp className="h-4 w-4" />
+                  Importar extrato
+                </Link>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead className="text-xs uppercase text-slate-500">
+                    <tr className="border-b border-slate-200">
+                      <th className="py-3 pr-4">Descrição</th>
+                      <th className="py-3 pr-4">Banco</th>
+                      <th className="py-3 pr-4">Categoria</th>
+                      <th className="py-3 pr-4">Data</th>
+                      <th className="py-3 pr-4">Tipo</th>
+                      <th className="py-3 text-right">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.bankItems.map((item) => (
+                      <tr key={item.id} className="border-b border-slate-100">
+                        <td className="py-3 pr-4 font-medium text-slate-950">{item.title}</td>
+                        <td className="py-3 pr-4">{item.bankLabel}</td>
+                        <td className="py-3 pr-4">{item.category}</td>
+                        <td className="py-3 pr-4">{brDate(item.transactionDate)}</td>
+                        <td className="py-3 pr-4">
+                          {item.direction === 'DEBIT' ? 'Saída' : 'Entrada'}
+                        </td>
+                        <td
+                          className={`py-3 text-right font-bold ${
+                            item.direction === 'DEBIT' ? 'text-red-700' : 'text-emerald-700'
+                          }`}
+                        >
+                          {item.direction === 'DEBIT' ? '-' : '+'}
+                          {money(item.amount)}
                         </td>
                       </tr>
                     ))}

@@ -425,7 +425,10 @@ export class FinancialCalculationService {
         paidTotal: '0.00',
         pendingTotal: '0.00',
         overdueTotal: '0.00',
+        bankDebitTotal: '0.00',
+        bankCreditTotal: '0.00',
         items: [],
+        bankItems: [],
       };
     }
 
@@ -537,6 +540,72 @@ export class FinancialCalculationService {
 
     const totalAmount = individualTotal.add(sharedResponsibilityTotal);
 
+    let bankItems: Array<{
+      id: string;
+      title: string;
+      description: string;
+      category: string;
+      source: 'BANK_IMPORT';
+      sourceLabel: string;
+      amount: string;
+      transactionDate: Date;
+      referenceMonth: Date;
+      direction: string;
+      bank: string;
+      bankLabel: string;
+      paymentMethod: string | null;
+    }> = [];
+    let bankDebitTotal = new Prisma.Decimal(0);
+    let bankCreditTotal = new Prisma.Decimal(0);
+
+    if (source !== 'SHARED') {
+      const bankEntries = await this.prisma.bankStatementEntry.findMany({
+        where: {
+          userId,
+          deletedAt: null,
+          referenceMonth: month,
+          ...(search
+            ? { description: { contains: search, mode: 'insensitive' } }
+            : {}),
+        },
+        orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }],
+      });
+
+      const bankLabels: Record<string, string> = {
+        NUBANK: 'Nubank',
+        INTER: 'Banco Inter',
+        BRADESCO: 'Bradesco',
+        PICPAY: 'PicPay',
+        ITAU: 'Itaú',
+        SANTANDER: 'Santander',
+        CAIXA: 'Caixa',
+        GENERIC: 'Banco',
+      };
+
+      for (const entry of bankEntries) {
+        if (entry.direction === 'DEBIT') {
+          bankDebitTotal = bankDebitTotal.add(entry.amount);
+        } else {
+          bankCreditTotal = bankCreditTotal.add(entry.amount);
+        }
+        bankItems.push({
+          id: entry.id,
+          title: entry.description,
+          description: entry.description,
+          category: entry.category ?? 'Outros',
+          source: 'BANK_IMPORT',
+          sourceLabel: `Extrato ${bankLabels[entry.bank] ?? entry.bank}`,
+          amount: entry.amount.toFixed(2),
+          transactionDate: entry.transactionDate,
+          referenceMonth: entry.referenceMonth,
+          direction: entry.direction,
+          bank: entry.bank,
+          bankLabel: bankLabels[entry.bank] ?? entry.bank,
+          paymentMethod: entry.paymentMethod,
+        });
+      }
+    }
+
     return {
       month: params.monthYm,
       source,
@@ -546,7 +615,10 @@ export class FinancialCalculationService {
       paidTotal: paidTotal.toFixed(2),
       pendingTotal: pendingTotal.toFixed(2),
       overdueTotal: overdueTotal.toFixed(2),
+      bankDebitTotal: bankDebitTotal.toFixed(2),
+      bankCreditTotal: bankCreditTotal.toFixed(2),
       items,
+      bankItems,
     };
   }
 

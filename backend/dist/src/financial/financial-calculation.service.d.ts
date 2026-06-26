@@ -67,6 +67,8 @@ export declare class FinancialCalculationService {
         paidTotal: string;
         pendingTotal: string;
         overdueTotal: string;
+        bankDebitTotal: string;
+        bankCreditTotal: string;
         items: {
             id: string;
             occurrenceId: string;
@@ -92,6 +94,21 @@ export declare class FinancialCalculationService {
                 name: string;
                 username: string;
             } | null;
+        }[];
+        bankItems: {
+            id: string;
+            title: string;
+            description: string;
+            category: string;
+            source: "BANK_IMPORT";
+            sourceLabel: string;
+            amount: string;
+            transactionDate: Date;
+            referenceMonth: Date;
+            direction: string;
+            bank: string;
+            bankLabel: string;
+            paymentMethod: string | null;
         }[];
     }>;
     calculateCoupleMonth(coupleId: string, monthYm: string): Promise<{

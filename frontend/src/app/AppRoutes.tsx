@@ -11,6 +11,7 @@ import { ExpenseFormPage } from '../pages/ExpenseFormPage';
 import { IncomesPage } from '../pages/IncomesPage';
 import { InstallmentsPage } from '../pages/InstallmentsPage';
 import { InvestmentsPage } from '../pages/InvestmentsPage';
+import { BankStatementImportPage } from '../pages/BankStatementImportPage';
 import { AssistantPage } from '../pages/AssistantPage';
 import { FinancialSettingsPage } from '../pages/FinancialSettingsPage';
 import { PermissionsPage } from '../pages/PermissionsPage';
@@ -32,6 +33,7 @@ export function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route path="/dashboard/individual" element={<IndividualDashboardPage />} />
           <Route path="/statement/individual" element={<IndividualStatementPage />} />
+          <Route path="/statement/import" element={<BankStatementImportPage />} />
           <Route path="/dashboard/couple" element={<CoupleDashboardPage />} />
           <Route path="/expenses/individual" element={<ExpensesPage scope="INDIVIDUAL" />} />
           <Route path="/expenses/couple" element={<ExpensesPage scope="SHARED" />} />

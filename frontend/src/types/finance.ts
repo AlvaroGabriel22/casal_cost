@@ -114,7 +114,24 @@ export type IndividualStatement = {
   paidTotal: string | number;
   pendingTotal: string | number;
   overdueTotal: string | number;
+  bankDebitTotal?: string | number;
+  bankCreditTotal?: string | number;
   items: IndividualStatementItem[];
+  bankItems?: Array<{
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    source: 'BANK_IMPORT';
+    sourceLabel: string;
+    amount: string | number;
+    transactionDate: string;
+    referenceMonth: string;
+    direction: 'DEBIT' | 'CREDIT';
+    bank: string;
+    bankLabel: string;
+    paymentMethod?: string | null;
+  }>;
 };
 
 export type Income = {

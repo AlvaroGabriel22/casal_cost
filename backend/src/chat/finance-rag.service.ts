@@ -66,7 +66,7 @@ export class FinanceRagService {
         ...(coupleId ? [{ coupleId }] : []),
       ],
     };
-    const [expense, occurrence, income, settings] = await Promise.all([
+    const [expense, occurrence, income, settings, bankEntries] = await Promise.all([
       this.prisma.expense.aggregate({
         where: expenseWhere,
         _count: true,
@@ -86,12 +86,18 @@ export class FinanceRagService {
         _max: { updatedAt: true },
       }),
       this.prisma.financialSettings.findUnique({ where: { userId } }),
+      this.prisma.bankStatementEntry.aggregate({
+        where: { userId, deletedAt: null },
+        _count: true,
+        _max: { updatedAt: true },
+      }),
     ]);
     return JSON.stringify({
       e: [expense._count, expense._max.updatedAt],
       o: [occurrence._count, occurrence._max.updatedAt],
       i: [income._count, income._max.updatedAt],
       s: settings?.updatedAt ?? null,
+      b: [bankEntries._count, bankEntries._max.updatedAt],
     });
   }
 
@@ -205,6 +211,23 @@ export class FinanceRagService {
       } catch (err) {
         this.logger.warn(`Falha ao montar resumo de ${monthYm}: ${err}`);
       }
+    }
+
+    const bankLines = await this.prisma.bankStatementEntry.findMany({
+      where: { userId, deletedAt: null },
+      orderBy: { transactionDate: 'desc' },
+      take: 400,
+    });
+    for (const line of bankLines) {
+      docs.push({
+        kind: 'bank_import',
+        refId: line.id,
+        content: `[Extrato bancário ${line.bank}] ${this.ymd(line.transactionDate)} | ${
+          line.direction === 'DEBIT' ? 'saída' : 'entrada'
+        }: ${this.brl(line.amount)} | ${line.description} | categoria sugerida: ${
+          line.category ?? 'Outros'
+        } | mês ref: ${this.ym(line.referenceMonth)}.`,
+      });
     }
 
     return docs;

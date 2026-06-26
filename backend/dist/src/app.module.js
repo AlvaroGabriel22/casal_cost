@@ -23,6 +23,7 @@ const cards_module_1 = require("./cards/cards.module");
 const chat_module_1 = require("./chat/chat.module");
 const insights_module_1 = require("./insights/insights.module");
 const investments_module_1 = require("./investments/investments.module");
+const statement_imports_module_1 = require("./statement-imports/statement-imports.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -44,6 +45,7 @@ exports.AppModule = AppModule = __decorate([
             chat_module_1.ChatModule,
             insights_module_1.InsightsModule,
             investments_module_1.InvestmentsModule,
+            statement_imports_module_1.StatementImportsModule,
         ],
     })
 ], AppModule);

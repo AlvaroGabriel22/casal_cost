@@ -89,6 +89,8 @@ export declare class ExpensesController {
             paidTotal: string;
             pendingTotal: string;
             overdueTotal: string;
+            bankDebitTotal: string;
+            bankCreditTotal: string;
             items: {
                 id: string;
                 occurrenceId: string;
@@ -114,6 +116,21 @@ export declare class ExpensesController {
                     name: string;
                     username: string;
                 } | null;
+            }[];
+            bankItems: {
+                id: string;
+                title: string;
+                description: string;
+                category: string;
+                source: "BANK_IMPORT";
+                sourceLabel: string;
+                amount: string;
+                transactionDate: Date;
+                referenceMonth: Date;
+                direction: string;
+                bank: string;
+                bankLabel: string;
+                paymentMethod: string | null;
             }[];
         };
         message: string;
