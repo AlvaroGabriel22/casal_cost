@@ -237,3 +237,26 @@ export function filterCreditCardImportLines(
 export function billingMonthsCovered(referenceMonths: Date[]): string[] {
   return [...new Set(referenceMonths.map(ym))].sort();
 }
+
+/** Mês da fatura a partir do nome do arquivo (ex.: Nubank_2026-01-01.csv → 2026-01). */
+export function parseBillingMonthFromFileName(fileName: string): Date | null {
+  const match = fileName.match(/(\d{4})-(\d{2})(?:-\d{2})?/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!year || month < 1 || month > 12) return null;
+  return utcDate(year, month - 1, 1);
+}
+
+export function assignCreditCardReferenceMonthsFromFileName(
+  lines: ParsedBankLine[],
+  fileName: string,
+  config?: BillingCycleConfig | null,
+  bank?: DetectedBank,
+): Date[] {
+  const fromFile = parseBillingMonthFromFileName(fileName);
+  if (fromFile) {
+    return lines.map(() => fromFile);
+  }
+  return assignCreditCardReferenceMonths(lines, config, bank);
+}

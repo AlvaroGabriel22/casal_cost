@@ -173,7 +173,27 @@ function UploadPanel({
 }
 
 function primaryMonth(row: StatementImportRecord): string {
+  if (row.sourceType === 'CREDIT_CARD') {
+    const fromName = billingMonthFromFileName(row.fileName);
+    if (fromName) return fromName;
+  }
   return [...row.monthsCovered].sort()[0] ?? '0000-00';
+}
+
+function billingMonthFromFileName(fileName: string): string | null {
+  const match = fileName.match(/(\d{4})-(\d{2})(?:-\d{2})?/);
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  return `${match[1]}-${match[2]}`;
+}
+
+function displayMonths(row: StatementImportRecord): string[] {
+  if (row.sourceType === 'CREDIT_CARD') {
+    const fromName = billingMonthFromFileName(row.fileName);
+    if (fromName) return [fromName];
+  }
+  return [...row.monthsCovered].sort();
 }
 
 function sortImportsByMonth(rows: StatementImportRecord[]): StatementImportRecord[] {
@@ -209,7 +229,7 @@ function ImportHistoryRow({ row, onDelete }: ImportHistoryRowProps) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-lg bg-white px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-[#103B73] shadow-sm">
-            {formatMonthsLabel(row.monthsCovered, isCard)}
+            {formatMonthsLabel(displayMonths(row), isCard)}
           </span>
           <span className="truncate text-sm font-semibold text-slate-950">{row.fileName}</span>
         </div>
@@ -368,7 +388,7 @@ export function BankStatementImportPage() {
         <UploadPanel
           sourceType="CREDIT_CARD"
           title="Extrato do cartão de crédito"
-          subtitle="Compras por estabelecimento — ciclo Nubank: fecha 7 dias antes do vencimento (pagamento de fatura vem do extrato da conta)"
+          subtitle="Nomeie o arquivo com a data da fatura (ex.: Nubank_2026-01-01.csv). Compras por estabelecimento — ciclo Nubank: fecha 7 dias antes do vencimento."
           icon={CreditCard}
           bank={cardBank}
           onBankChange={setCardBank}

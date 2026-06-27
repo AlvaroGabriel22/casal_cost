@@ -67,9 +67,13 @@ let StatementImportsService = class StatementImportsService {
             ...(card.closingDay != null ? { closingDay: card.closingDay } : {}),
         };
     }
-    resolveReferenceMonths(lines, sourceType, bank, billingConfig) {
+    resolveReferenceMonths(lines, sourceType, bank, billingConfig, fileName) {
         if (sourceType === client_1.StatementSourceType.CREDIT_CARD) {
-            return (0, billing_cycle_1.assignCreditCardReferenceMonths)(lines, billingConfig, bank);
+            const fromFile = (0, billing_cycle_1.parseBillingMonthFromFileName)(fileName);
+            if (!fromFile) {
+                throw new common_1.BadRequestException('Para extrato de cartão, inclua a data da fatura no nome do arquivo (ex.: Nubank_2026-01-01.csv).');
+            }
+            return (0, billing_cycle_1.assignCreditCardReferenceMonthsFromFileName)(lines, fileName, billingConfig, bank);
         }
         return lines.map((line) => (0, utils_1.refMonthFromDate)(line.transactionDate));
     }
@@ -99,7 +103,7 @@ let StatementImportsService = class StatementImportsService {
         if (importLines.length === 0) {
             throw new common_1.BadRequestException('Nenhum lançamento utilizável no arquivo (pagamentos de fatura do cartão são ignorados — use o extrato da conta).');
         }
-        const referenceMonths = this.resolveReferenceMonths(importLines, sourceType, parsed.bank, billingConfig);
+        const referenceMonths = this.resolveReferenceMonths(importLines, sourceType, parsed.bank, billingConfig, fileName);
         const months = (0, billing_cycle_1.billingMonthsCovered)(referenceMonths);
         const debits = importLines.filter((l) => l.direction === 'DEBIT');
         const credits = importLines.filter((l) => l.direction === 'CREDIT');
@@ -154,7 +158,7 @@ let StatementImportsService = class StatementImportsService {
         if (importLines.length === 0) {
             throw new common_1.BadRequestException('Nenhum lançamento utilizável no arquivo (pagamentos de fatura do cartão são ignorados — use o extrato da conta).');
         }
-        const referenceMonths = this.resolveReferenceMonths(importLines, sourceType, parsed.bank, billingConfig);
+        const referenceMonths = this.resolveReferenceMonths(importLines, sourceType, parsed.bank, billingConfig, fileName);
         const monthsCovered = (0, billing_cycle_1.billingMonthsCovered)(referenceMonths);
         const fingerprints = (0, utils_1.buildFingerprintsForImport)(userId, parsed.bank, importLines, sourceType);
         const result = await this.prisma.$transaction(async (tx) => {

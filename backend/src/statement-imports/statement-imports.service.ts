@@ -16,9 +16,10 @@ import { ok } from '../common/api-response';
 import { AuditLogService } from '../audit/audit-log.service';
 import { AuthService } from '../auth/auth.service';
 import {
-  assignCreditCardReferenceMonths,
+  assignCreditCardReferenceMonthsFromFileName,
   billingMonthsCovered,
   filterCreditCardImportLines,
+  parseBillingMonthFromFileName,
   type BillingCycleConfig,
 } from './billing-cycle';
 import { guessCategory, guessPaymentMethod } from './parsers/category-guess';
@@ -90,9 +91,21 @@ export class StatementImportsService {
     sourceType: StatementSourceType,
     bank: DetectedBank,
     billingConfig: BillingCycleConfig | null,
+    fileName: string,
   ): Date[] {
     if (sourceType === StatementSourceType.CREDIT_CARD) {
-      return assignCreditCardReferenceMonths(lines, billingConfig, bank);
+      const fromFile = parseBillingMonthFromFileName(fileName);
+      if (!fromFile) {
+        throw new BadRequestException(
+          'Para extrato de cartão, inclua a data da fatura no nome do arquivo (ex.: Nubank_2026-01-01.csv).',
+        );
+      }
+      return assignCreditCardReferenceMonthsFromFileName(
+        lines,
+        fileName,
+        billingConfig,
+        bank,
+      );
     }
     return lines.map((line) => refMonthFromDate(line.transactionDate));
   }
@@ -147,6 +160,7 @@ export class StatementImportsService {
       sourceType,
       parsed.bank,
       billingConfig,
+      fileName,
     );
     const months = billingMonthsCovered(referenceMonths);
     const debits = importLines.filter((l) => l.direction === 'DEBIT');
@@ -229,6 +243,7 @@ export class StatementImportsService {
       sourceType,
       parsed.bank,
       billingConfig,
+      fileName,
     );
     const monthsCovered = billingMonthsCovered(referenceMonths);
     const fingerprints = buildFingerprintsForImport(

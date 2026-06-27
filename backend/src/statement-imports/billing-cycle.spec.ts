@@ -1,10 +1,12 @@
 import { DetectedBank, StatementSourceType } from '@prisma/client';
 import {
   assignCreditCardReferenceMonths,
+  assignCreditCardReferenceMonthsFromFileName,
   filterCreditCardImportLines,
   isWithinNubankBillingPeriod,
   nubankBillingPeriodForDueMonth,
   nubankReferenceMonthForPurchase,
+  parseBillingMonthFromFileName,
   shouldSkipCreditCardImportLine,
 } from './billing-cycle';
 import { directionFromSignedAmount, parseStatementFile } from './parsers/statement.parser';
@@ -52,6 +54,43 @@ describe('shouldSkipCreditCardImportLine', () => {
         DetectedBank.NUBANK,
       ),
     ).toBe(true);
+  });
+});
+
+describe('parseBillingMonthFromFileName', () => {
+  it('reads YYYY-MM-DD from card export name', () => {
+    const ref = parseBillingMonthFromFileName('Nubank_2026-01-01.csv');
+    expect(ref?.toISOString().slice(0, 7)).toBe('2026-01');
+  });
+
+  it('reads YYYY-MM without day', () => {
+    const ref = parseBillingMonthFromFileName('fatura_2025-06.csv');
+    expect(ref?.toISOString().slice(0, 7)).toBe('2025-06');
+  });
+});
+
+describe('assignCreditCardReferenceMonthsFromFileName', () => {
+  const sampleTsv = `date\ttitle\tamount
+2025-05-20\tHiper Db Cidade Nova\t67,9
+2025-05-26\tFrangao Restaurante\t30`;
+
+  it('assigns every line to the month encoded in the file name', () => {
+    const parsed = parseStatementFile({
+      content: sampleTsv,
+      fileName: 'Nubank_2026-01-01.csv',
+      format: 'CSV',
+      sourceType: StatementSourceType.CREDIT_CARD,
+    }).lines;
+
+    const importable = filterCreditCardImportLines(parsed, DetectedBank.NUBANK);
+    const refs = assignCreditCardReferenceMonthsFromFileName(
+      importable,
+      'Nubank_2026-01-01.csv',
+      { dueDay: 1 },
+      DetectedBank.NUBANK,
+    );
+
+    expect(refs.every((ref) => ref.toISOString().slice(0, 7) === '2026-01')).toBe(true);
   });
 });
 

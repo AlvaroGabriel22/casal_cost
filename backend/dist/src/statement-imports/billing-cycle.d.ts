@@ -17,3 +17,5 @@ export declare function purchaseBillingReferenceMonth(txDate: Date, closingDay: 
 export declare function assignCreditCardReferenceMonths(lines: ParsedBankLine[], config?: BillingCycleConfig | null, bank?: DetectedBank): Date[];
 export declare function filterCreditCardImportLines(lines: ParsedBankLine[], bank?: DetectedBank): ParsedBankLine[];
 export declare function billingMonthsCovered(referenceMonths: Date[]): string[];
+export declare function parseBillingMonthFromFileName(fileName: string): Date | null;
+export declare function assignCreditCardReferenceMonthsFromFileName(lines: ParsedBankLine[], fileName: string, config?: BillingCycleConfig | null, bank?: DetectedBank): Date[];

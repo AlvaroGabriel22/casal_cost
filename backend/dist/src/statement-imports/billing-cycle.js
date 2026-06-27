@@ -10,6 +10,8 @@ exports.purchaseBillingReferenceMonth = purchaseBillingReferenceMonth;
 exports.assignCreditCardReferenceMonths = assignCreditCardReferenceMonths;
 exports.filterCreditCardImportLines = filterCreditCardImportLines;
 exports.billingMonthsCovered = billingMonthsCovered;
+exports.parseBillingMonthFromFileName = parseBillingMonthFromFileName;
+exports.assignCreditCardReferenceMonthsFromFileName = assignCreditCardReferenceMonthsFromFileName;
 const client_1 = require("@prisma/client");
 const utils_1 = require("./parsers/utils");
 const PAYMENT_LINE = /pagamento\s*(?:recebido|de\s*fatura|fatura)/i;
@@ -175,5 +177,22 @@ function filterCreditCardImportLines(lines, bank) {
 }
 function billingMonthsCovered(referenceMonths) {
     return [...new Set(referenceMonths.map(utils_1.ym))].sort();
+}
+function parseBillingMonthFromFileName(fileName) {
+    const match = fileName.match(/(\d{4})-(\d{2})(?:-\d{2})?/);
+    if (!match)
+        return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!year || month < 1 || month > 12)
+        return null;
+    return utcDate(year, month - 1, 1);
+}
+function assignCreditCardReferenceMonthsFromFileName(lines, fileName, config, bank) {
+    const fromFile = parseBillingMonthFromFileName(fileName);
+    if (fromFile) {
+        return lines.map(() => fromFile);
+    }
+    return assignCreditCardReferenceMonths(lines, config, bank);
 }
 //# sourceMappingURL=billing-cycle.js.map
