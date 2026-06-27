@@ -20,5 +20,9 @@ export declare class StatementConsolidationService {
     monthsWithCardData(userId: string, monthYms?: string[]): Promise<Set<string>>;
     isConsumptionEntry(entry: Pick<BankStatementEntry, 'direction' | 'description' | 'sourceType' | 'category' | 'transactionDate' | 'bank'>, monthsWithCard: Set<string>, monthYm: string, dueDay: number): boolean;
     getConfirmedConsumption(userId: string, monthYm: string): Promise<ConfirmedConsumptionMonth>;
+    getCardStatementOutflows(userId: string, monthYm: string): Promise<{
+        total: number;
+        entryCount: number;
+    }>;
     private round;
 }

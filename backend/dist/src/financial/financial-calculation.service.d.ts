@@ -39,11 +39,14 @@ export declare class FinancialCalculationService {
         totalIndividualExpensesMonth: string;
         totalSharedExpensesResponsibilityMonth: string;
         totalExpensesMonth: string;
+        totalExpensesWithCard: string;
         expensesPendingMonth: string;
         expensesConfirmedMonth: string;
+        cardStatementOutflows: string;
         balanceMonth: string;
         balanceConfirmedMonth: string;
         hasStatementData: boolean;
+        hasCardStatementData: boolean;
         reconciledCount: number;
         statement: {
             confirmedAccountDebits: string;

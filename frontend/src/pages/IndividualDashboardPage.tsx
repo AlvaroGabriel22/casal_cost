@@ -7,7 +7,7 @@ import { Badge } from '../components/ui/Badge';
 import { CategoryPie, IncomeExpenseBars, EvolutionLine } from '../components/finance/DashboardCharts';
 import { ReconciliationPanel } from '../components/finance/ReconciliationPanel';
 import { dashboardService } from '../services/finance.service';
-import { brDate, currentMonth, money } from '../utils/format';
+import { brDate, currentMonth, money, numberValue } from '../utils/format';
 import { useAsyncData } from '../hooks/useAsyncData';
 
 function addMonths(month: string, amount: number) {
@@ -41,6 +41,10 @@ export function IndividualDashboardPage() {
 
   const statusTone =
     data.status === 'NEGATIVE' ? 'danger' : data.status === 'ATTENTION' ? 'warning' : 'good';
+  const plannedExpenses = numberValue(data.totalExpensesMonth);
+  const cardSpending = numberValue(data.cardStatementOutflows);
+  const totalWithCard = numberValue(data.totalExpensesWithCard ?? plannedExpenses + cardSpending);
+  const hasCardData = data.hasCardStatementData ?? cardSpending > 0;
   const projection =
     data.futureProjection?.map((row) => ({
       month: row.month,
@@ -69,15 +73,11 @@ export function IndividualDashboardPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label={data.hasStatementData ? 'Saldo confirmado' : 'Saldo'}
-          value={money(
-            data.hasStatementData
-              ? (data.balanceConfirmedMonth ?? data.balanceMonth)
-              : data.balanceMonth,
-          )}
+          label="Saldo"
+          value={money(data.balanceMonth)}
           hint={
-            data.hasStatementData
-              ? `Projetado ${money(data.balanceMonth)}`
+            hasCardData
+              ? `Gastos totais ${money(totalWithCard)} (previstas + cartão)`
               : data.status
           }
           tone={statusTone}
@@ -96,22 +96,26 @@ export function IndividualDashboardPage() {
             label="Despesas previstas"
             value={money(data.totalExpensesMonth)}
             hint={
-              data.expensesPendingMonth
-                ? `Pendentes ${money(data.expensesPendingMonth)}`
-                : 'Cadastro manual'
+              hasCardData
+                ? `Com cartão: ${money(totalWithCard)}`
+                : data.expensesPendingMonth
+                  ? `Pendentes ${money(data.expensesPendingMonth)}`
+                  : 'Cadastro manual'
             }
           />
         </Link>
-        {data.hasStatementData ? (
-          <MetricCard
-            label="Consumo confirmado"
-            value={money(data.expensesConfirmedMonth ?? 0)}
-            hint={`Conta ${money(data.statement?.confirmedAccountDebits ?? 0)} · Cartão ${money(data.statement?.confirmedCardDebits ?? 0)}`}
-            tone="navy"
-          />
+        {hasCardData ? (
+          <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to="/statement/import">
+            <MetricCard
+              label="Gastos do cartão"
+              value={money(cardSpending)}
+              hint="Saídas do extrato de cartão"
+              tone="navy"
+            />
+          </Link>
         ) : (
           <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to="/statement/import">
-            <MetricCard label="Extrato" value="Importar" hint="Confirme gastos reais" />
+            <MetricCard label="Extrato do cartão" value="Importar" hint="Confirme gastos reais no cartão" />
           </Link>
         )}
         <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to={statementLink('SHARED')}>
@@ -136,9 +140,9 @@ export function IndividualDashboardPage() {
             <Badge tone={data.status}>{data.status}</Badge>
           </div>
           <p className="mt-3 text-sm text-slate-500">
-            {data.hasStatementData
-              ? 'Saldo confirmado usa consumo real dos extratos (conta + cartão). Despesas previstas vêm do cadastro manual.'
-              : 'Importe extratos de conta e cartão para confirmar gastos e quitar contas automaticamente.'}
+            {hasCardData
+              ? 'Saldo = receitas − despesas previstas. Gastos do cartão vêm do extrato (saídas) e somam às despesas previstas para ver o total do mês.'
+              : 'Importe o extrato do cartão para ver os gastos reais e somá-los às despesas previstas.'}
           </p>
         </div>
       </div>
@@ -149,22 +153,11 @@ export function IndividualDashboardPage() {
         <Card title="Receitas x despesas" subtitle="Comparativo do mês selecionado">
           <IncomeExpenseBars
             income={data.totalIncomeMonth}
-            expenses={
-              data.hasStatementData
-                ? (data.expensesConfirmedMonth ?? data.totalExpensesMonth)
-                : data.totalExpensesMonth
-            }
+            expenses={hasCardData ? totalWithCard : data.totalExpensesMonth}
           />
         </Card>
-        <Card title="Despesas por categoria" subtitle={data.hasStatementData ? 'Previsto (cadastro) — use extrato para consumo confirmado' : 'Distribuição das suas despesas no mês'}>
-          {data.hasStatementData && data.statement?.expensesByCategoryConfirmed?.length ? (
-            <CategoryPie
-              data={data.statement.expensesByCategoryConfirmed.map((row) => ({
-                category: row.category,
-                amount: row.amount,
-              }))}
-            />
-          ) : data.expensesByCategory?.length ? (
+        <Card title="Despesas por categoria" subtitle="Distribuição das despesas previstas no cadastro">
+          {data.expensesByCategory?.length ? (
             <CategoryPie data={data.expensesByCategory} />
           ) : (
             <IncomeExpenseBars income={0} expenses={data.totalExpensesMonth} />

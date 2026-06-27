@@ -274,8 +274,9 @@ export class FinancialCalculationService {
     const totalExpensesMonth = totalIndividual.add(totalSharedResp);
     const expensesPendingMonth = pendingIndividual.add(pendingSharedResp);
 
-    const [confirmed, reconciledCount] = await Promise.all([
+    const [confirmed, cardOutflows, reconciledCount] = await Promise.all([
       this.statementConsolidation.getConfirmedConsumption(userId, monthYm),
+      this.statementConsolidation.getCardStatementOutflows(userId, monthYm),
       this.prisma.statementReconciliation.count({
         where: {
           userId,
@@ -284,11 +285,13 @@ export class FinancialCalculationService {
       }),
     ]);
 
-    const confirmedTotal = new Prisma.Decimal(confirmed.total);
+    const cardStatementOutflows = new Prisma.Decimal(cardOutflows.total);
     const hasStatementData = confirmed.entryCount > 0;
+    const hasCardStatementData = cardOutflows.entryCount > 0;
+    const totalExpensesWithCard = totalExpensesMonth.add(cardStatementOutflows);
     const balanceMonth = incomeBlock.totalIncomeMonth.sub(totalExpensesMonth);
     const balanceConfirmedMonth = hasStatementData
-      ? incomeBlock.totalIncomeMonth.sub(confirmedTotal)
+      ? incomeBlock.totalIncomeMonth.sub(confirmed.total)
       : balanceMonth;
     const status = this.getFinancialStatus(
       incomeBlock.totalIncomeMonth,
@@ -387,11 +390,14 @@ export class FinancialCalculationService {
       totalIndividualExpensesMonth: totalIndividual.toFixed(2),
       totalSharedExpensesResponsibilityMonth: totalSharedResp.toFixed(2),
       totalExpensesMonth: totalExpensesMonth.toFixed(2),
+      totalExpensesWithCard: totalExpensesWithCard.toFixed(2),
       expensesPendingMonth: expensesPendingMonth.toFixed(2),
       expensesConfirmedMonth: confirmed.total.toFixed(2),
+      cardStatementOutflows: cardStatementOutflows.toFixed(2),
       balanceMonth: balanceMonth.toFixed(2),
       balanceConfirmedMonth: balanceConfirmedMonth.toFixed(2),
       hasStatementData,
+      hasCardStatementData,
       reconciledCount,
       statement: {
         confirmedAccountDebits: confirmed.accountDebits.toFixed(2),

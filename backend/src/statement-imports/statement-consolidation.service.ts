@@ -184,6 +184,39 @@ export class StatementConsolidationService {
     };
   }
 
+  /** Saídas do extrato de cartão no mês de referência (fatura). */
+  async getCardStatementOutflows(
+    userId: string,
+    monthYm: string,
+  ): Promise<{ total: number; entryCount: number }> {
+    const month = this.monthStart(monthYm);
+    const dueDay = await this.resolveDueDay(userId);
+    const entries = await this.prisma.bankStatementEntry.findMany({
+      where: {
+        userId,
+        deletedAt: null,
+        sourceType: StatementSourceType.CREDIT_CARD,
+        referenceMonth: month,
+        direction: 'DEBIT',
+      },
+    });
+
+    let total = 0;
+    let entryCount = 0;
+    for (const entry of entries) {
+      if (
+        entry.bank === DetectedBank.NUBANK &&
+        !isWithinNubankBillingPeriod(entry.transactionDate, monthYm, dueDay)
+      ) {
+        continue;
+      }
+      total += Number(entry.amount);
+      entryCount += 1;
+    }
+
+    return { total: this.round(total), entryCount };
+  }
+
   private round(n: number) {
     return Math.round(n * 100) / 100;
   }

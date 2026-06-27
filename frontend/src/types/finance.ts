@@ -183,11 +183,14 @@ export type IndividualDashboard = {
   totalIndividualExpensesMonth: string | number;
   totalSharedExpensesResponsibilityMonth: string | number;
   totalExpensesMonth: string | number;
+  totalExpensesWithCard?: string | number;
   expensesPendingMonth?: string | number;
   expensesConfirmedMonth?: string | number;
+  cardStatementOutflows?: string | number;
   balanceMonth: string | number;
   balanceConfirmedMonth?: string | number;
   hasStatementData?: boolean;
+  hasCardStatementData?: boolean;
   reconciledCount?: number;
   statement?: {
     confirmedAccountDebits: string | number;
