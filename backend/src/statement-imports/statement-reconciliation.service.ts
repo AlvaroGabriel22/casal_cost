@@ -3,7 +3,6 @@ import {
   ExpenseScope,
   ExpenseStatus,
   PaymentMethod,
-  Prisma,
   ReconciliationMatchType,
   StatementSourceType,
 } from '@prisma/client';
@@ -26,6 +25,40 @@ const AMOUNT_TOLERANCE = 0.02;
 const DATE_BEFORE_DAYS = 7;
 const DATE_AFTER_DAYS = 21;
 
+export type ReconciliationOverview = {
+  month: string;
+  summary: {
+    awaitingCount: number;
+    awaitingTotal: string;
+    unmatchedCount: number;
+    unmatchedTotal: string;
+    confirmedCount: number;
+  };
+  awaitingExtract: Array<{
+    occurrenceId: string;
+    title: string;
+    amount: string;
+    dueDate: string;
+    paymentMethod: string;
+    status: string;
+  }>;
+  unmatchedStatementDebits: Array<{
+    entryId: string;
+    description: string;
+    amount: string;
+    transactionDate: string;
+  }>;
+  confirmedMatches: Array<{
+    matchId: string;
+    title: string;
+    entryDescription: string;
+    amount: string;
+    matchType: ReconciliationMatchType;
+    confidence: number;
+    paidAt: string;
+  }>;
+};
+
 @Injectable()
 export class StatementReconciliationService {
   private readonly logger = new Logger(StatementReconciliationService.name);
@@ -47,6 +80,106 @@ export class StatementReconciliationService {
     }
 
     return { matched, skipped };
+  }
+
+  async getOverview(userId: string, monthYm: string): Promise<ReconciliationOverview> {
+    const [y, m] = monthYm.split('-').map(Number);
+    const refMonth = new Date(Date.UTC(y, m - 1, 1));
+
+    const [awaitingRows, entries, confirmedRows] = await Promise.all([
+      this.prisma.expenseOccurrence.findMany({
+        where: {
+          deletedAt: null,
+          referenceMonth: refMonth,
+          status: { in: [ExpenseStatus.PENDING, ExpenseStatus.OVERDUE] },
+          reconciliation: null,
+          expense: {
+            deletedAt: null,
+            paymentMethod: { in: RECONCILABLE_METHODS },
+            scope: ExpenseScope.INDIVIDUAL,
+            ownerUserId: userId,
+          },
+        },
+        include: { expense: true },
+        orderBy: { dueDate: 'asc' },
+      }),
+      this.prisma.bankStatementEntry.findMany({
+        where: {
+          userId,
+          deletedAt: null,
+          sourceType: StatementSourceType.BANK_ACCOUNT,
+          referenceMonth: refMonth,
+          direction: 'DEBIT',
+        },
+        include: { reconciliation: true },
+        orderBy: { transactionDate: 'desc' },
+      }),
+      this.prisma.statementReconciliation.findMany({
+        where: {
+          userId,
+          occurrence: { referenceMonth: refMonth },
+        },
+        include: {
+          occurrence: { include: { expense: true } },
+          entry: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const unmatchedStatementDebits = entries
+      .filter((e) => {
+        if (e.reconciliation) return false;
+        const type = classifyBankMovement(e.description, 'DEBIT') as BankMovementType;
+        return type !== 'INVESTMENT_APPLY' && type !== 'CARD_BILL';
+      })
+      .map((e) => ({
+        entryId: e.id,
+        description: e.description,
+        amount: Number(e.amount).toFixed(2),
+        transactionDate: e.transactionDate.toISOString().slice(0, 10),
+      }));
+
+    const awaitingExtract = awaitingRows.map((occ) => ({
+      occurrenceId: occ.id,
+      title: occ.expense.title,
+      amount: Number(occ.amount).toFixed(2),
+      dueDate: occ.dueDate.toISOString().slice(0, 10),
+      paymentMethod: occ.expense.paymentMethod,
+      status: occ.status,
+    }));
+
+    const confirmedMatches = confirmedRows.map((row) => ({
+      matchId: row.id,
+      title: row.occurrence.expense.title,
+      entryDescription: row.entry.description,
+      amount: Number(row.occurrence.amount).toFixed(2),
+      matchType: row.matchType,
+      confidence: row.confidence,
+      paidAt: (row.occurrence.paymentDate ?? row.entry.transactionDate)
+        .toISOString()
+        .slice(0, 10),
+    }));
+
+    const awaitingTotal = awaitingExtract.reduce((s, r) => s + Number(r.amount), 0);
+    const unmatchedTotal = unmatchedStatementDebits.reduce(
+      (s, r) => s + Number(r.amount),
+      0,
+    );
+
+    return {
+      month: monthYm,
+      summary: {
+        awaitingCount: awaitingExtract.length,
+        awaitingTotal: awaitingTotal.toFixed(2),
+        unmatchedCount: unmatchedStatementDebits.length,
+        unmatchedTotal: unmatchedTotal.toFixed(2),
+        confirmedCount: confirmedMatches.length,
+      },
+      awaitingExtract,
+      unmatchedStatementDebits,
+      confirmedMatches,
+    };
   }
 
   async reconcileMonth(
@@ -75,9 +208,7 @@ export class StatementReconciliationService {
           expense: {
             deletedAt: null,
             paymentMethod: { in: RECONCILABLE_METHODS },
-            OR: [
-              { scope: ExpenseScope.INDIVIDUAL, ownerUserId: userId },
-            ],
+            OR: [{ scope: ExpenseScope.INDIVIDUAL, ownerUserId: userId }],
           },
           reconciliation: null,
         },
@@ -119,9 +250,7 @@ export class StatementReconciliationService {
             entry.description,
           );
           const confidence =
-            amountDiff < 0.001
-              ? 90 + titleScore
-              : 70 + titleScore;
+            amountDiff < 0.001 ? 90 + titleScore : 70 + titleScore;
 
           return { occ, confidence, amountDiff };
         })

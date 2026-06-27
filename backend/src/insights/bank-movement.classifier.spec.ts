@@ -23,5 +23,6 @@ describe('classifyBankMovement', () => {
 
   it('detects card bill payment', () => {
     expect(classifyBankMovement('Pagamento de fatura', 'DEBIT')).toBe('CARD_BILL');
+    expect(classifyBankMovement('Pagamento recebido', 'CREDIT')).toBe('CARD_BILL');
   });
 });

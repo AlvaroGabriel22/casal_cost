@@ -26,6 +26,9 @@ export declare class DashboardController {
             month: string;
             totalIncomeMonth: string;
             baseSalaryMonth: string;
+            defaultBaseSalary: string;
+            salaryOverridden: boolean;
+            salaryOverrideNote: string | null;
             extraIncomeMonth: string;
             totalIndividualExpensesMonth: string;
             totalSharedExpensesResponsibilityMonth: string;

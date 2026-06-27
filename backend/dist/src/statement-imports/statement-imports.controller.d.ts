@@ -1,6 +1,7 @@
 import { UploadedFile } from '@nestjs/common';
 import type { AuthUser } from '../auth/current-user.decorator';
 import { StatementImportsService } from './statement-imports.service';
+import { StatementReconciliationService } from './statement-reconciliation.service';
 import { DeleteStatementImportDto, StatementBankHintDto, StatementImportQueryDto } from './dto/statement-import.dto';
 type UploadedFile = {
     buffer: Buffer;
@@ -9,7 +10,8 @@ type UploadedFile = {
 };
 export declare class StatementImportsController {
     private readonly imports;
-    constructor(imports: StatementImportsService);
+    private readonly reconciliation;
+    constructor(imports: StatementImportsService, reconciliation: StatementReconciliationService);
     list(user: AuthUser): Promise<{
         success: true;
         data: {
@@ -43,17 +45,22 @@ export declare class StatementImportsController {
             deletedAt: Date | null;
             referenceMonth: Date;
             userId: string;
-            transactionDate: Date;
             direction: import(".prisma/client").$Enums.BankTransactionDirection;
+            transactionDate: Date;
+            externalId: string | null;
             importId: string;
             fingerprint: string;
             bank: import(".prisma/client").$Enums.DetectedBank;
             sourceType: import(".prisma/client").$Enums.StatementSourceType;
-            externalId: string | null;
         }[];
         message: string;
     }>;
-    preview(user: AuthUser, file: UploadedFile, query: StatementBankHintDto): {
+    reconciliationOverview(user: AuthUser, month?: string): Promise<{
+        success: true;
+        data: import("./statement-reconciliation.service").ReconciliationOverview;
+        message: string;
+    }>;
+    preview(user: AuthUser, file: UploadedFile, query: StatementBankHintDto): Promise<{
         success: true;
         data: {
             bank: import(".prisma/client").$Enums.DetectedBank;
@@ -65,6 +72,8 @@ export declare class StatementImportsController {
             accountLabel: string | undefined;
             lineCount: number;
             monthsCovered: string[];
+            billingCycleApplied: boolean;
+            skippedCardPayments: number | undefined;
             debitTotal: string;
             creditTotal: string;
             sample: {
@@ -73,10 +82,11 @@ export declare class StatementImportsController {
                 amount: string;
                 direction: "DEBIT" | "CREDIT";
                 category: string;
+                billingMonth: string;
             }[];
         };
         message: string;
-    };
+    }>;
     import(user: AuthUser, file: UploadedFile, query: StatementBankHintDto): Promise<{
         success: true;
         data: {

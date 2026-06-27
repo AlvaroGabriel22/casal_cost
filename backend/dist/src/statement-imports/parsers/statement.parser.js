@@ -1,12 +1,25 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BANK_LABELS = void 0;
+exports.directionFromSignedAmount = directionFromSignedAmount;
 exports.parseOfx = parseOfx;
 exports.parseCsv = parseCsv;
 exports.parseStatementFile = parseStatementFile;
 const client_1 = require("@prisma/client");
 const category_guess_1 = require("./category-guess");
 const utils_1 = require("./utils");
+function directionFromSignedAmount(signedAmount, sourceType, isCardFile = false) {
+    const isCreditCard = sourceType === client_1.StatementSourceType.CREDIT_CARD || isCardFile;
+    if (isCreditCard) {
+        return signedAmount < 0 ? 'CREDIT' : 'DEBIT';
+    }
+    return signedAmount < 0 ? 'DEBIT' : 'CREDIT';
+}
+function isCreditCardInput(input, headers = []) {
+    if (input.sourceType === client_1.StatementSourceType.CREDIT_CARD)
+        return true;
+    return /cartao|cartão|fatura|credit.?card|credit_card|credito|crédito/i.test(input.fileName + headers.join(' '));
+}
 function ofxTag(block, tag) {
     const re = new RegExp(`<${tag}>([^<\\n]+)`, 'i');
     const match = re.exec(block);
@@ -65,7 +78,12 @@ function parseOfx(input) {
         const name = ofxTag(block, 'NAME') ?? '';
         const description = [name, memo].filter(Boolean).join(' — ').trim() || 'Lançamento';
         const trnType = (ofxTag(block, 'TRNTYPE') ?? '').toUpperCase();
-        const direction = trnType === 'CREDIT' || trnType === 'DEP' || signed > 0 ? 'CREDIT' : 'DEBIT';
+        const isCard = isCreditCardInput(input);
+        const direction = isCard
+            ? directionFromSignedAmount(signed, client_1.StatementSourceType.CREDIT_CARD)
+            : trnType === 'CREDIT' || trnType === 'DEP' || signed > 0
+                ? 'CREDIT'
+                : 'DEBIT';
         lines.push({
             transactionDate: date,
             description,
@@ -99,8 +117,11 @@ function splitCsvLine(line, delimiter) {
     return out;
 }
 function detectDelimiter(headerLine) {
+    const tabs = (headerLine.match(/\t/g) ?? []).length;
     const semicolons = (headerLine.match(/;/g) ?? []).length;
     const commas = (headerLine.match(/,/g) ?? []).length;
+    if (tabs > 0 && tabs >= semicolons && tabs >= commas)
+        return '\t';
     return semicolons > commas ? ';' : ',';
 }
 function normHeader(h) {
@@ -237,8 +258,8 @@ function parseCsv(input) {
         const description = descriptionParts.filter(Boolean).join(' — ').trim() ||
             cols.slice(1, -1).filter(Boolean).join(' ') ||
             'Lançamento';
-        const direction = signedAmount < 0 ? 'DEBIT' : 'CREDIT';
-        const isCard = /cartao|fatura|credit card/i.test(input.fileName + headers.join(' '));
+        const isCard = isCreditCardInput(input, headers);
+        const direction = directionFromSignedAmount(signedAmount, input.sourceType, isCard);
         lines.push({
             transactionDate: date,
             description,

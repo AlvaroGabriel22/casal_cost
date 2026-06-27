@@ -7,12 +7,35 @@ export function buildFingerprint(
   bank: DetectedBank,
   line: ParsedBankLine,
   sourceType: StatementSourceType = StatementSourceType.BANK_ACCOUNT,
+  duplicateIndex = 0,
 ): string {
   const date = line.transactionDate.toISOString().slice(0, 10);
   const key = line.externalId
     ? `${userId}|${bank}|${sourceType}|${line.externalId}|${line.direction}|${line.amount.toFixed(2)}`
-    : `${userId}|${bank}|${sourceType}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
+    : duplicateIndex > 0
+      ? `${userId}|${bank}|${sourceType}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}|#${duplicateIndex}`
+      : `${userId}|${bank}|${sourceType}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
   return createHash('sha256').update(key).digest('hex');
+}
+
+/** Fingerprints únicos por arquivo — trata linhas repetidas (ex.: 2× Foztrans no mesmo dia). */
+export function buildFingerprintsForImport(
+  userId: string,
+  bank: DetectedBank,
+  lines: ParsedBankLine[],
+  sourceType: StatementSourceType = StatementSourceType.BANK_ACCOUNT,
+): string[] {
+  const seen = new Map<string, number>();
+  return lines.map((line) => {
+    if (line.externalId) {
+      return buildFingerprint(userId, bank, line, sourceType);
+    }
+    const date = line.transactionDate.toISOString().slice(0, 10);
+    const base = `${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
+    const index = seen.get(base) ?? 0;
+    seen.set(base, index + 1);
+    return buildFingerprint(userId, bank, line, sourceType, index);
+  });
 }
 
 function normalizeDesc(value: string): string {

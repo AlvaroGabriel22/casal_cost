@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/current-user.decorator';
 import { UsersService } from './users.service';
 import { UpdateProfileDto, UpdateSalaryDto } from './dto/update-user.dto';
+import { UpsertMonthlySalaryOverrideDto } from './dto/monthly-salary-override.dto';
 
 @Controller('users')
 @UseGuards(JwtAuthGuard)
@@ -26,5 +27,29 @@ export class UsersController {
     @Body() dto: UpdateSalaryDto,
   ) {
     return this.users.updateSalary(user.id, dto);
+  }
+
+  @Get('me/salary/overrides')
+  listSalaryOverrides(
+    @CurrentUser() user: AuthUser,
+    @Query('month') month?: string,
+  ) {
+    return this.users.listSalaryOverrides(user.id, month);
+  }
+
+  @Patch('me/salary/overrides')
+  upsertSalaryOverride(
+    @CurrentUser() user: AuthUser,
+    @Body() dto: UpsertMonthlySalaryOverrideDto,
+  ) {
+    return this.users.upsertSalaryOverride(user.id, dto);
+  }
+
+  @Delete('me/salary/overrides')
+  deleteSalaryOverride(
+    @CurrentUser() user: AuthUser,
+    @Query('month') month: string,
+  ) {
+    return this.users.deleteSalaryOverride(user.id, month);
   }
 }

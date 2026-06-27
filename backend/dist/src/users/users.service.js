@@ -14,10 +14,12 @@ const common_1 = require("@nestjs/common");
 const prisma_service_1 = require("../prisma/prisma.service");
 const api_response_1 = require("../common/api-response");
 const audit_log_service_1 = require("../audit/audit-log.service");
+const financial_calculation_service_1 = require("../financial/financial-calculation.service");
 let UsersService = class UsersService {
-    constructor(prisma, audit) {
+    constructor(prisma, audit, calc) {
         this.prisma = prisma;
         this.audit = audit;
+        this.calc = calc;
     }
     async getMe(userId) {
         const user = await this.prisma.user.findFirst({
@@ -96,11 +98,100 @@ let UsersService = class UsersService {
         }
         return (0, api_response_1.ok)(settings, 'Operation completed successfully');
     }
+    async listSalaryOverrides(userId, month) {
+        if (month) {
+            const referenceMonth = this.calc.monthStart(month);
+            const row = await this.prisma.monthlySalaryOverride.findUnique({
+                where: {
+                    userId_referenceMonth: { userId, referenceMonth },
+                },
+            });
+            return (0, api_response_1.ok)(row ? [this.mapSalaryOverride(row)] : [], 'Operation completed successfully');
+        }
+        const rows = await this.prisma.monthlySalaryOverride.findMany({
+            where: { userId },
+            orderBy: { referenceMonth: 'desc' },
+            take: 24,
+        });
+        return (0, api_response_1.ok)(rows.map((row) => this.mapSalaryOverride(row)), 'Operation completed successfully');
+    }
+    async upsertSalaryOverride(userId, body) {
+        const referenceMonth = this.calc.monthStart(body.month);
+        const existing = await this.prisma.monthlySalaryOverride.findUnique({
+            where: {
+                userId_referenceMonth: { userId, referenceMonth },
+            },
+        });
+        const row = await this.prisma.monthlySalaryOverride.upsert({
+            where: {
+                userId_referenceMonth: { userId, referenceMonth },
+            },
+            create: {
+                userId,
+                referenceMonth,
+                amount: String(body.amount),
+                note: body.note?.trim() || null,
+            },
+            update: {
+                amount: String(body.amount),
+                note: body.note?.trim() || null,
+            },
+        });
+        await this.audit.log({
+            userId,
+            entity: 'MonthlySalaryOverride',
+            entityId: row.id,
+            action: existing ? 'UPDATE' : 'CREATE',
+            oldValue: existing
+                ? { amount: existing.amount.toString(), note: existing.note }
+                : undefined,
+            newValue: { amount: row.amount.toString(), note: row.note, month: body.month },
+        });
+        return (0, api_response_1.ok)(this.mapSalaryOverride(row), 'Operation completed successfully');
+    }
+    async deleteSalaryOverride(userId, month) {
+        const referenceMonth = this.calc.monthStart(month);
+        const existing = await this.prisma.monthlySalaryOverride.findUnique({
+            where: {
+                userId_referenceMonth: { userId, referenceMonth },
+            },
+        });
+        if (!existing) {
+            throw new common_1.NotFoundException('Ajuste de salário não encontrado para este mês.');
+        }
+        await this.prisma.monthlySalaryOverride.delete({
+            where: { id: existing.id },
+        });
+        await this.audit.log({
+            userId,
+            entity: 'MonthlySalaryOverride',
+            entityId: existing.id,
+            action: 'DELETE',
+            oldValue: {
+                amount: existing.amount.toString(),
+                note: existing.note,
+                month,
+            },
+        });
+        return (0, api_response_1.ok)({ month }, 'Operation completed successfully');
+    }
+    mapSalaryOverride(row) {
+        const month = row.referenceMonth.toISOString().slice(0, 7);
+        return {
+            id: row.id,
+            month,
+            amount: row.amount.toString(),
+            note: row.note,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+        };
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
-        audit_log_service_1.AuditLogService])
+        audit_log_service_1.AuditLogService,
+        financial_calculation_service_1.FinancialCalculationService])
 ], UsersService);
 //# sourceMappingURL=users.service.js.map

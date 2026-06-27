@@ -22,6 +22,9 @@ export declare class FinancialCalculationService {
     getFinancialStatus(totalIncome: Prisma.Decimal, totalExpenses: Prisma.Decimal): FinancialStatusLabel;
     calculateIncome(userId: string, month: Date, baseSalary: Prisma.Decimal): Promise<{
         baseSalaryMonth: Prisma.Decimal;
+        defaultBaseSalary: Prisma.Decimal;
+        salaryOverridden: boolean;
+        salaryOverrideNote: string | null;
         extraIncomeMonth: Prisma.Decimal;
         totalIncomeMonth: Prisma.Decimal;
     }>;
@@ -29,6 +32,9 @@ export declare class FinancialCalculationService {
         month: string;
         totalIncomeMonth: string;
         baseSalaryMonth: string;
+        defaultBaseSalary: string;
+        salaryOverridden: boolean;
+        salaryOverrideNote: string | null;
         extraIncomeMonth: string;
         totalIndividualExpensesMonth: string;
         totalSharedExpensesResponsibilityMonth: string;

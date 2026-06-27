@@ -77,7 +77,11 @@ export function InstallmentsPage() {
   const [savingPayment, setSavingPayment] = useState(false);
   const [cardManagerOpen, setCardManagerOpen] = useState(false);
   const [newCardName, setNewCardName] = useState('');
-  const [dueDayPrompt, setDueDayPrompt] = useState<{ name: string; dueDay: string } | null>(null);
+  const [dueDayPrompt, setDueDayPrompt] = useState<{
+    name: string;
+    dueDay: string;
+    closingDay: string;
+  } | null>(null);
   const [savingCard, setSavingCard] = useState(false);
   const [editForm, setEditForm] = useState({
     title: '',
@@ -217,7 +221,11 @@ export function InstallmentsPage() {
 
   function openDueDayPrompt(name: string) {
     const existing = cards?.find((card) => card.name === name);
-    setDueDayPrompt({ name, dueDay: existing ? String(existing.dueDay) : '' });
+    setDueDayPrompt({
+      name,
+      dueDay: existing ? String(existing.dueDay) : '',
+      closingDay: existing?.closingDay ? String(existing.closingDay) : '',
+    });
   }
 
   function startAddCustomCard() {
@@ -233,11 +241,21 @@ export function InstallmentsPage() {
       setToast({ message: 'Informe um dia de vencimento entre 1 e 31.', type: 'error' });
       return;
     }
+    const closingRaw = dueDayPrompt.closingDay.trim();
+    const closingDay =
+      closingRaw === '' ? undefined : Number(closingRaw);
+    if (
+      closingDay !== undefined &&
+      (!Number.isInteger(closingDay) || closingDay < 1 || closingDay > 31)
+    ) {
+      setToast({ message: 'Informe um dia de fechamento entre 1 e 31.', type: 'error' });
+      return;
+    }
     setSavingCard(true);
     try {
-      await cardService.upsert(dueDayPrompt.name.trim(), day);
+      await cardService.upsert(dueDayPrompt.name.trim(), day, closingDay);
       setToast({
-        message: 'Cartão salvo. Vencimento aplicado às parcelas pendentes desse cartão.',
+        message: 'Cartão salvo. Vencimento e fechamento usados na importação de extrato.',
         type: 'success',
       });
       setDueDayPrompt(null);
@@ -636,7 +654,10 @@ export function InstallmentsPage() {
                   >
                     <div className="min-w-0">
                       <p className="truncate font-medium text-slate-900">{card.name}</p>
-                      <p className="text-xs text-slate-500">Vence dia {card.dueDay}</p>
+                      <p className="text-xs text-slate-500">
+                        Vence dia {card.dueDay}
+                        {card.closingDay ? ` · Fecha dia ${card.closingDay}` : ''}
+                      </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       <button
@@ -704,7 +725,7 @@ export function InstallmentsPage() {
       </Modal>
       <Modal
         open={!!dueDayPrompt}
-        title="Data de vencimento do cartão"
+        title="Datas do cartão"
         onClose={() => setDueDayPrompt(null)}
       >
         {dueDayPrompt && (
@@ -716,8 +737,9 @@ export function InstallmentsPage() {
             }}
           >
             <p className="text-sm text-slate-600">
-              Informe o dia do vencimento da fatura do cartão <strong>{dueDayPrompt.name}</strong>.
-              Essa data será usada automaticamente em novos parcelamentos com esse cartão.
+              Informe vencimento e fechamento do cartão <strong>{dueDayPrompt.name}</strong>.
+              Usamos essas datas para agrupar compras do extrato na fatura correta (ex.: Nubank
+              fecha dia 20, vence dia 1).
             </p>
             <Input
               label="Dia do vencimento (1 a 31) *"
@@ -726,6 +748,15 @@ export function InstallmentsPage() {
               max={31}
               value={dueDayPrompt.dueDay}
               onChange={(e) => setDueDayPrompt({ ...dueDayPrompt, dueDay: e.target.value })}
+            />
+            <Input
+              label="Dia do fechamento (opcional)"
+              type="number"
+              min={1}
+              max={31}
+              placeholder="Ex.: 20 — detectamos pelo extrato se vazio"
+              value={dueDayPrompt.closingDay}
+              onChange={(e) => setDueDayPrompt({ ...dueDayPrompt, closingDay: e.target.value })}
             />
             <div className="flex justify-end gap-3">
               <Button type="button" variant="outline" onClick={() => setDueDayPrompt(null)}>

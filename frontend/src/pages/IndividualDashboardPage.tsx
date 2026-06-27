@@ -5,6 +5,7 @@ import { ErrorState, Spinner } from '../components/ui/States';
 import { MonthPicker } from '../components/ui/MonthPicker';
 import { Badge } from '../components/ui/Badge';
 import { CategoryPie, IncomeExpenseBars, EvolutionLine } from '../components/finance/DashboardCharts';
+import { ReconciliationPanel } from '../components/finance/ReconciliationPanel';
 import { dashboardService } from '../services/finance.service';
 import { brDate, currentMonth, money } from '../utils/format';
 import { useAsyncData } from '../hooks/useAsyncData';
@@ -81,7 +82,15 @@ export function IndividualDashboardPage() {
           }
           tone={statusTone}
         />
-        <MetricCard label="Receitas" value={money(data.totalIncomeMonth)} hint={`Salário ${money(data.baseSalaryMonth)}`} />
+        <MetricCard
+          label="Receitas"
+          value={money(data.totalIncomeMonth)}
+          hint={
+            data.salaryOverridden
+              ? `Salário ajustado ${money(data.baseSalaryMonth)} (base ${money(data.defaultBaseSalary ?? data.baseSalaryMonth)})`
+              : `Salário ${money(data.baseSalaryMonth)}`
+          }
+        />
         <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to={statementLink('ALL')}>
           <MetricCard
             label="Despesas previstas"
@@ -133,6 +142,8 @@ export function IndividualDashboardPage() {
           </p>
         </div>
       </div>
+
+      <ReconciliationPanel month={month} hasStatementData={data.hasStatementData} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title="Receitas x despesas" subtitle="Comparativo do mês selecionado">

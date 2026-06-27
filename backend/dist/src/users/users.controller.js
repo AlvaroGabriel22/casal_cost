@@ -18,6 +18,7 @@ const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../auth/current-user.decorator");
 const users_service_1 = require("./users.service");
 const update_user_dto_1 = require("./dto/update-user.dto");
+const monthly_salary_override_dto_1 = require("./dto/monthly-salary-override.dto");
 let UsersController = class UsersController {
     constructor(users) {
         this.users = users;
@@ -30,6 +31,15 @@ let UsersController = class UsersController {
     }
     salary(user, dto) {
         return this.users.updateSalary(user.id, dto);
+    }
+    listSalaryOverrides(user, month) {
+        return this.users.listSalaryOverrides(user.id, month);
+    }
+    upsertSalaryOverride(user, dto) {
+        return this.users.upsertSalaryOverride(user.id, dto);
+    }
+    deleteSalaryOverride(user, month) {
+        return this.users.deleteSalaryOverride(user.id, month);
     }
 };
 exports.UsersController = UsersController;
@@ -56,6 +66,30 @@ __decorate([
     __metadata("design:paramtypes", [Object, update_user_dto_1.UpdateSalaryDto]),
     __metadata("design:returntype", void 0)
 ], UsersController.prototype, "salary", null);
+__decorate([
+    (0, common_1.Get)('me/salary/overrides'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Query)('month')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "listSalaryOverrides", null);
+__decorate([
+    (0, common_1.Patch)('me/salary/overrides'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, monthly_salary_override_dto_1.UpsertMonthlySalaryOverrideDto]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "upsertSalaryOverride", null);
+__decorate([
+    (0, common_1.Delete)('me/salary/overrides'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Query)('month')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], UsersController.prototype, "deleteSalaryOverride", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),

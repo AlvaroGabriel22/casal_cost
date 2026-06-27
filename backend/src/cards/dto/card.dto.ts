@@ -11,6 +11,12 @@ export class UpsertCardDto {
   @Min(1)
   @Max(31)
   dueDay: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  closingDay?: number;
 }
 
 export class UpdateCardDto {
@@ -25,4 +31,11 @@ export class UpdateCardDto {
   @Min(1)
   @Max(31)
   dueDay?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(31)
+  closingDay?: number;
 }

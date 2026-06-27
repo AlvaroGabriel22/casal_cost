@@ -130,6 +130,12 @@ let FinancialCalculationService = class FinancialCalculationService {
         return 'POSITIVE';
     }
     async calculateIncome(userId, month, baseSalary) {
+        const override = await this.prisma.monthlySalaryOverride.findUnique({
+            where: {
+                userId_referenceMonth: { userId, referenceMonth: month },
+            },
+        });
+        const effectiveSalary = override?.amount ?? baseSalary;
         const incomes = await this.prisma.income.findMany({
             where: { userId, deletedAt: null },
         });
@@ -145,9 +151,12 @@ let FinancialCalculationService = class FinancialCalculationService {
                 extraMonth = extraMonth.add(inc.amount);
             }
         }
-        const totalIncome = baseSalary.add(extraMonth).add(salaryExtras);
+        const totalIncome = effectiveSalary.add(extraMonth).add(salaryExtras);
         return {
-            baseSalaryMonth: baseSalary,
+            baseSalaryMonth: effectiveSalary,
+            defaultBaseSalary: baseSalary,
+            salaryOverridden: !!override,
+            salaryOverrideNote: override?.note ?? null,
             extraIncomeMonth: extraMonth.add(salaryExtras),
             totalIncomeMonth: totalIncome,
         };
@@ -297,6 +306,9 @@ let FinancialCalculationService = class FinancialCalculationService {
             month: monthYm,
             totalIncomeMonth: incomeBlock.totalIncomeMonth.toFixed(2),
             baseSalaryMonth: incomeBlock.baseSalaryMonth.toFixed(2),
+            defaultBaseSalary: incomeBlock.defaultBaseSalary.toFixed(2),
+            salaryOverridden: incomeBlock.salaryOverridden,
+            salaryOverrideNote: incomeBlock.salaryOverrideNote,
             extraIncomeMonth: incomeBlock.extraIncomeMonth.toFixed(2),
             totalIndividualExpensesMonth: totalIndividual.toFixed(2),
             totalSharedExpensesResponsibilityMonth: totalSharedResp.toFixed(2),

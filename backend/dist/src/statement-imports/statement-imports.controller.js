@@ -18,18 +18,28 @@ const common_1 = require("@nestjs/common");
 const platform_express_1 = require("@nestjs/platform-express");
 const jwt_auth_guard_1 = require("../auth/jwt-auth.guard");
 const current_user_decorator_1 = require("../auth/current-user.decorator");
+const api_response_1 = require("../common/api-response");
 const statement_imports_service_1 = require("./statement-imports.service");
+const statement_reconciliation_service_1 = require("./statement-reconciliation.service");
 const statement_import_dto_1 = require("./dto/statement-import.dto");
 const uploadOptions = { limits: { fileSize: 5 * 1024 * 1024 } };
 let StatementImportsController = class StatementImportsController {
-    constructor(imports) {
+    constructor(imports, reconciliation) {
         this.imports = imports;
+        this.reconciliation = reconciliation;
     }
     list(user) {
         return this.imports.listImports(user.id);
     }
     entries(user, query) {
         return this.imports.listEntries(user.id, query.month, query.bank, query.sourceType);
+    }
+    async reconciliationOverview(user, month) {
+        if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+            throw new common_1.BadRequestException('Informe o mês no formato YYYY-MM.');
+        }
+        const overview = await this.reconciliation.getOverview(user.id, month);
+        return (0, api_response_1.ok)(overview, 'Operation completed successfully');
     }
     preview(user, file, query) {
         if (!file?.buffer?.length) {
@@ -64,6 +74,14 @@ __decorate([
     __metadata("design:returntype", void 0)
 ], StatementImportsController.prototype, "entries", null);
 __decorate([
+    (0, common_1.Get)('reconciliation'),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Query)('month')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", Promise)
+], StatementImportsController.prototype, "reconciliationOverview", null);
+__decorate([
     (0, common_1.Post)('preview'),
     (0, common_1.UseInterceptors)((0, platform_express_1.FileInterceptor)('file', uploadOptions)),
     __param(0, (0, current_user_decorator_1.CurrentUser)()),
@@ -95,6 +113,7 @@ __decorate([
 exports.StatementImportsController = StatementImportsController = __decorate([
     (0, common_1.Controller)('statement-imports'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
-    __metadata("design:paramtypes", [statement_imports_service_1.StatementImportsService])
+    __metadata("design:paramtypes", [statement_imports_service_1.StatementImportsService,
+        statement_reconciliation_service_1.StatementReconciliationService])
 ], StatementImportsController);
 //# sourceMappingURL=statement-imports.controller.js.map

@@ -13,6 +13,7 @@ export declare class CardsController {
             name: string;
             userId: string;
             dueDay: number;
+            closingDay: number | null;
         }[];
         message: string;
     }>;
@@ -25,6 +26,7 @@ export declare class CardsController {
             name: string;
             userId: string;
             dueDay: number;
+            closingDay: number | null;
         };
         message: string;
     }>;
@@ -37,6 +39,7 @@ export declare class CardsController {
             name: string;
             userId: string;
             dueDay: number;
+            closingDay: number | null;
         };
         message: string;
     }>;

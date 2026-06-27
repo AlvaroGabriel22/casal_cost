@@ -15,6 +15,7 @@ const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const bank_movement_classifier_1 = require("./bank-movement.classifier");
 const category_guess_1 = require("../statement-imports/parsers/category-guess");
+const billing_cycle_1 = require("../statement-imports/billing-cycle");
 const finance_context_matcher_1 = require("../finance-context/finance-context.matcher");
 const SPENDING_DEBIT_TYPES = [
     'EXPENSE',
@@ -45,6 +46,11 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
         });
         if (rows.length === 0)
             return empty;
+        const card = await this.prisma.userCard.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' },
+        });
+        const dueDay = card?.dueDay ?? 1;
         const entries = rows.map((row) => this.classify(row));
         const monthsWithCard = new Set(entries
             .filter((e) => e.sourceType === client_1.StatementSourceType.CREDIT_CARD)
@@ -67,6 +73,7 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
             monthsCovered,
             contextRules,
             monthsWithCard,
+            dueDay,
         });
         const movementSummary = this.composeMovementSummary({
             referenceMonth,
@@ -150,10 +157,13 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
         const amount = Number(row.amount);
         const direction = row.direction;
         const date = row.transactionDate;
+        const month = row.sourceType === client_1.StatementSourceType.CREDIT_CARD
+            ? this.ym(row.referenceMonth)
+            : this.ym(date);
         return {
             id: row.id,
             date,
-            month: this.ym(date),
+            month,
             amount,
             direction,
             description: row.description,
@@ -341,7 +351,7 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
         const refLabel = this.monthLabel(input.referenceMonth);
         const monthSpending = input.entries.filter((e) => e.month === input.referenceMonth &&
             e.direction === 'DEBIT' &&
-            this.isConsumptionDebit(e, input.monthsWithCard));
+            this.isConsumptionDebit(e, input.monthsWithCard, input.dueDay));
         const monthIncome = input.entries.filter((e) => e.month === input.referenceMonth &&
             e.direction === 'CREDIT' &&
             e.type !== 'INVESTMENT_REDEEM');
@@ -352,7 +362,7 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
         const overspendAmount = spentMoreThanEarned ? this.round(Math.abs(balance)) : 0;
         const recurringKeys = new Set();
         const allSpending = input.entries.filter((e) => e.direction === 'DEBIT' &&
-            this.isConsumptionDebit(e, input.monthsWithCard));
+            this.isConsumptionDebit(e, input.monthsWithCard, input.dueDay));
         const recurringGroups = this.groupRecurringExpenses(allSpending, input.contextRules);
         const recurringExpenses = recurringGroups
             .filter((g) => g.occurrences >= 2)
@@ -549,7 +559,7 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
             return `Investimento — ${merchant}`;
         return `${category} — ${merchant}`;
     }
-    isConsumptionDebit(e, monthsWithCard) {
+    isConsumptionDebit(e, monthsWithCard, dueDay) {
         if (e.direction !== 'DEBIT')
             return false;
         if (e.type === 'INVESTMENT_APPLY')
@@ -557,6 +567,11 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
         if (e.sourceType === client_1.StatementSourceType.BANK_ACCOUNT &&
             e.type === 'CARD_BILL' &&
             monthsWithCard.has(e.month)) {
+            return false;
+        }
+        if (e.sourceType === client_1.StatementSourceType.CREDIT_CARD &&
+            e.bank === client_1.DetectedBank.NUBANK &&
+            !(0, billing_cycle_1.isWithinNubankBillingPeriod)(e.date, e.month, dueDay)) {
             return false;
         }
         if (!SPENDING_DEBIT_TYPES.includes(e.type))

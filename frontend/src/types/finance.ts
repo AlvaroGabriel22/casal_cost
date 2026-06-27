@@ -14,6 +14,15 @@ export type FinancialSettings = {
   defaultCurrency: string;
 };
 
+export type MonthlySalaryOverride = {
+  id: string;
+  month: string;
+  amount: string | number;
+  note?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
 export type ExpenseStatus = 'PENDING' | 'PAID' | 'OVERDUE' | 'CANCELLED';
 export type ExpenseScope = 'INDIVIDUAL' | 'SHARED';
 export type InvestmentScope = 'INDIVIDUAL' | 'COUPLE';
@@ -167,6 +176,9 @@ export type IndividualDashboard = {
   month: string;
   totalIncomeMonth: string | number;
   baseSalaryMonth: string | number;
+  defaultBaseSalary?: string | number;
+  salaryOverridden?: boolean;
+  salaryOverrideNote?: string | null;
   extraIncomeMonth: string | number;
   totalIndividualExpensesMonth: string | number;
   totalSharedExpensesResponsibilityMonth: string | number;
@@ -246,4 +258,5 @@ export type UserCard = {
   id: string;
   name: string;
   dueDay: number;
+  closingDay?: number | null;
 };

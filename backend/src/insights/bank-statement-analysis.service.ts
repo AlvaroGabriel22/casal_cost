@@ -7,6 +7,7 @@ import {
   movementTypeLabel,
 } from './bank-movement.classifier';
 import { inferSpendingCategory, isInvestmentMovement } from '../statement-imports/parsers/category-guess';
+import { isWithinNubankBillingPeriod } from '../statement-imports/billing-cycle';
 import {
   ContextRuleLike,
   findMatchingRule,
@@ -203,6 +204,12 @@ export class BankStatementAnalysisService {
 
     if (rows.length === 0) return empty;
 
+    const card = await this.prisma.userCard.findFirst({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+    });
+    const dueDay = card?.dueDay ?? 1;
+
     const entries = rows.map((row) => this.classify(row));
     const monthsWithCard = new Set(
       entries
@@ -235,6 +242,7 @@ export class BankStatementAnalysisService {
       monthsCovered,
       contextRules,
       monthsWithCard,
+      dueDay,
     });
 
     const movementSummary = this.composeMovementSummary({
@@ -343,10 +351,14 @@ export class BankStatementAnalysisService {
     const amount = Number(row.amount);
     const direction = row.direction as 'DEBIT' | 'CREDIT';
     const date = row.transactionDate;
+    const month =
+      row.sourceType === StatementSourceType.CREDIT_CARD
+        ? this.ym(row.referenceMonth)
+        : this.ym(date);
     return {
       id: row.id,
       date,
-      month: this.ym(date),
+      month,
       amount,
       direction,
       description: row.description,
@@ -596,6 +608,7 @@ export class BankStatementAnalysisService {
     monthsCovered: string[];
     contextRules: ContextRuleLike[];
     monthsWithCard: Set<string>;
+    dueDay: number;
   }): BankSpendingAnalysis | null {
     if (!input.refBreakdown) return null;
 
@@ -604,7 +617,7 @@ export class BankStatementAnalysisService {
       (e) =>
         e.month === input.referenceMonth &&
         e.direction === 'DEBIT' &&
-        this.isConsumptionDebit(e, input.monthsWithCard),
+        this.isConsumptionDebit(e, input.monthsWithCard, input.dueDay),
     );
     const monthIncome = input.entries.filter(
       (e) =>
@@ -627,7 +640,7 @@ export class BankStatementAnalysisService {
     const allSpending = input.entries.filter(
       (e) =>
         e.direction === 'DEBIT' &&
-        this.isConsumptionDebit(e, input.monthsWithCard),
+        this.isConsumptionDebit(e, input.monthsWithCard, input.dueDay),
     );
     const recurringGroups = this.groupRecurringExpenses(allSpending, input.contextRules);
     const recurringExpenses = recurringGroups
@@ -860,6 +873,7 @@ export class BankStatementAnalysisService {
   private isConsumptionDebit(
     e: ClassifiedEntry,
     monthsWithCard: Set<string>,
+    dueDay: number,
   ): boolean {
     if (e.direction !== 'DEBIT') return false;
     if (e.type === 'INVESTMENT_APPLY') return false;
@@ -867,6 +881,13 @@ export class BankStatementAnalysisService {
       e.sourceType === StatementSourceType.BANK_ACCOUNT &&
       e.type === 'CARD_BILL' &&
       monthsWithCard.has(e.month)
+    ) {
+      return false;
+    }
+    if (
+      e.sourceType === StatementSourceType.CREDIT_CARD &&
+      e.bank === DetectedBank.NUBANK &&
+      !isWithinNubankBillingPeriod(e.date, e.month, dueDay)
     ) {
       return false;
     }

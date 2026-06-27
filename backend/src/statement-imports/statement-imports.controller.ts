@@ -15,7 +15,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { AuthUser } from '../auth/current-user.decorator';
+import { ok } from '../common/api-response';
 import { StatementImportsService } from './statement-imports.service';
+import { StatementReconciliationService } from './statement-reconciliation.service';
 import {
   DeleteStatementImportDto,
   StatementBankHintDto,
@@ -33,7 +35,10 @@ const uploadOptions = { limits: { fileSize: 5 * 1024 * 1024 } };
 @Controller('statement-imports')
 @UseGuards(JwtAuthGuard)
 export class StatementImportsController {
-  constructor(private readonly imports: StatementImportsService) {}
+  constructor(
+    private readonly imports: StatementImportsService,
+    private readonly reconciliation: StatementReconciliationService,
+  ) {}
 
   @Get()
   list(@CurrentUser() user: AuthUser) {
@@ -43,6 +48,18 @@ export class StatementImportsController {
   @Get('entries')
   entries(@CurrentUser() user: AuthUser, @Query() query: StatementImportQueryDto) {
     return this.imports.listEntries(user.id, query.month, query.bank, query.sourceType);
+  }
+
+  @Get('reconciliation')
+  async reconciliationOverview(
+    @CurrentUser() user: AuthUser,
+    @Query('month') month?: string,
+  ) {
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException('Informe o mês no formato YYYY-MM.');
+    }
+    const overview = await this.reconciliation.getOverview(user.id, month);
+    return ok(overview, 'Operation completed successfully');
   }
 
   @Post('preview')

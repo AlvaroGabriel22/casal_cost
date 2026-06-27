@@ -12,7 +12,9 @@ export declare class StatementImportsService {
     detectFormat(fileName: string, mime?: string): BankStatementFormat | null;
     resolveSourceType(fileName: string, requested?: StatementSourceType): StatementSourceType;
     private invalidateRagIndex;
-    preview(userId: string, buffer: Buffer, fileName: string, bankHint?: DetectedBank, sourceTypeHint?: StatementSourceType): {
+    private resolveBillingConfig;
+    private resolveReferenceMonths;
+    preview(userId: string, buffer: Buffer, fileName: string, bankHint?: DetectedBank, sourceTypeHint?: StatementSourceType): Promise<{
         success: true;
         data: {
             bank: import(".prisma/client").$Enums.DetectedBank;
@@ -24,6 +26,8 @@ export declare class StatementImportsService {
             accountLabel: string | undefined;
             lineCount: number;
             monthsCovered: string[];
+            billingCycleApplied: boolean;
+            skippedCardPayments: number | undefined;
             debitTotal: string;
             creditTotal: string;
             sample: {
@@ -32,10 +36,11 @@ export declare class StatementImportsService {
                 amount: string;
                 direction: "DEBIT" | "CREDIT";
                 category: string;
+                billingMonth: string;
             }[];
         };
         message: string;
-    };
+    }>;
     import(userId: string, buffer: Buffer, fileName: string, bankHint?: DetectedBank, sourceTypeHint?: StatementSourceType): Promise<{
         success: true;
         data: {
@@ -101,13 +106,13 @@ export declare class StatementImportsService {
             deletedAt: Date | null;
             referenceMonth: Date;
             userId: string;
-            transactionDate: Date;
             direction: import(".prisma/client").$Enums.BankTransactionDirection;
+            transactionDate: Date;
+            externalId: string | null;
             importId: string;
             fingerprint: string;
             bank: import(".prisma/client").$Enums.DetectedBank;
             sourceType: import(".prisma/client").$Enums.StatementSourceType;
-            externalId: string | null;
         }[];
         message: string;
     }>;

@@ -12,6 +12,7 @@ export declare class CardsService {
             name: string;
             userId: string;
             dueDay: number;
+            closingDay: number | null;
         }[];
         message: string;
     }>;
@@ -24,6 +25,7 @@ export declare class CardsService {
             name: string;
             userId: string;
             dueDay: number;
+            closingDay: number | null;
         };
         message: string;
     }>;
@@ -36,6 +38,7 @@ export declare class CardsService {
             name: string;
             userId: string;
             dueDay: number;
+            closingDay: number | null;
         };
         message: string;
     }>;

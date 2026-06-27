@@ -16,8 +16,9 @@ export declare class StatementConsolidationService {
     private readonly prisma;
     constructor(prisma: PrismaService);
     monthStart(ym: string): Date;
+    private resolveDueDay;
     monthsWithCardData(userId: string, monthYms?: string[]): Promise<Set<string>>;
-    isConsumptionEntry(entry: Pick<BankStatementEntry, 'direction' | 'description' | 'sourceType' | 'category'>, monthsWithCard: Set<string>, monthYm: string): boolean;
+    isConsumptionEntry(entry: Pick<BankStatementEntry, 'direction' | 'description' | 'sourceType' | 'category' | 'transactionDate' | 'bank'>, monthsWithCard: Set<string>, monthYm: string, dueDay: number): boolean;
     getConfirmedConsumption(userId: string, monthYm: string): Promise<ConfirmedConsumptionMonth>;
     private round;
 }

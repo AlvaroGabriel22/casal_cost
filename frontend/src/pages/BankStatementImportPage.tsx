@@ -141,7 +141,17 @@ function UploadPanel({
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <MetricCard label="Lançamentos" value={String(preview.lineCount)} />
-              <MetricCard label="Meses" value={preview.monthsCovered.join(', ')} />
+              <MetricCard
+                label={preview.billingCycleApplied ? 'Faturas (vencimento)' : 'Meses'}
+                value={preview.monthsCovered.join(', ')}
+              />
+              {preview.skippedCardPayments ? (
+                <MetricCard
+                  label="Pagamentos ignorados"
+                  value={String(preview.skippedCardPayments)}
+                  hint="Fatura paga — use extrato da conta"
+                />
+              ) : null}
               <MetricCard label="Saídas" value={money(preview.debitTotal)} tone="danger" />
               <MetricCard label="Entradas" value={money(preview.creditTotal)} tone="good" />
             </div>
@@ -159,6 +169,120 @@ function UploadPanel({
         <Toast message={toast?.message ?? null} type={toast?.type} />
       </div>
     </Card>
+  );
+}
+
+function primaryMonth(row: StatementImportRecord): string {
+  return [...row.monthsCovered].sort()[0] ?? '0000-00';
+}
+
+function sortImportsByMonth(rows: StatementImportRecord[]): StatementImportRecord[] {
+  return [...rows].sort((a, b) => {
+    const byMonth = primaryMonth(a).localeCompare(primaryMonth(b));
+    if (byMonth !== 0) return byMonth;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+}
+
+function formatMonthsLabel(months: string[], isCard: boolean): string {
+  if (months.length === 0) return '—';
+  const sorted = [...months].sort();
+  const formatted = sorted.map((ym) => {
+    const [y, m] = ym.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', {
+      month: 'short',
+      year: 'numeric',
+    });
+  });
+  return isCard ? `Faturas: ${formatted.join(', ')}` : formatted.join(', ');
+}
+
+type ImportHistoryRowProps = {
+  row: StatementImportRecord;
+  onDelete: (row: StatementImportRecord) => void;
+};
+
+function ImportHistoryRow({ row, onDelete }: ImportHistoryRowProps) {
+  const isCard = row.sourceType === 'CREDIT_CARD';
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/60 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-lg bg-white px-2.5 py-1 text-xs font-bold uppercase tracking-wide text-[#103B73] shadow-sm">
+            {formatMonthsLabel(row.monthsCovered, isCard)}
+          </span>
+          <span className="truncate text-sm font-semibold text-slate-950">{row.fileName}</span>
+        </div>
+        <p className="mt-1 text-sm text-slate-500">
+          {row.bankLabel ?? row.bank} · {row.lineCount} lançamentos ·{' '}
+          {new Date(row.createdAt).toLocaleString('pt-BR')}
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+          {row.format}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 px-3 text-red-700 hover:bg-red-50 hover:text-red-800"
+          onClick={() => onDelete(row)}
+        >
+          <Trash2 className="h-4 w-4" />
+          Excluir
+        </Button>
+      </div>
+    </li>
+  );
+}
+
+type ImportHistorySectionProps = {
+  title: string;
+  subtitle: string;
+  icon: typeof Landmark;
+  rows: StatementImportRecord[];
+  emptyMessage: string;
+  onDelete: (row: StatementImportRecord) => void;
+};
+
+function ImportHistorySection({
+  title,
+  subtitle,
+  icon: Icon,
+  rows,
+  emptyMessage,
+  onDelete,
+}: ImportHistorySectionProps) {
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/50 p-5">
+        <div className="flex items-center gap-2 text-slate-700">
+          <Icon className="h-5 w-5 text-[#103B73]" />
+          <h3 className="font-semibold">{title}</h3>
+        </div>
+        <p className="mt-2 text-sm text-slate-500">{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 border-b border-slate-100 pb-2">
+        <Icon className="h-5 w-5 text-[#103B73]" />
+        <div>
+          <h3 className="font-semibold text-slate-950">{title}</h3>
+          <p className="text-xs text-slate-500">{subtitle}</p>
+        </div>
+        <span className="ml-auto rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+          {rows.length}
+        </span>
+      </div>
+      <ul className="space-y-2">
+        {rows.map((row) => (
+          <ImportHistoryRow key={row.id} row={row} onDelete={onDelete} />
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -200,6 +324,19 @@ export function BankStatementImportPage() {
     }
   }
 
+  function openDelete(row: StatementImportRecord) {
+    setDeleting(row);
+    setDeletePassword('');
+  }
+
+  const accountImports = sortImportsByMonth(
+    history?.filter((row) => row.sourceType === 'BANK_ACCOUNT') ?? [],
+  );
+  const cardImports = sortImportsByMonth(
+    history?.filter((row) => row.sourceType === 'CREDIT_CARD') ?? [],
+  );
+  const hasHistory = (history?.length ?? 0) > 0;
+
   return (
     <div className="space-y-6">
       <div className="rounded-2xl bg-white p-5 shadow-sm">
@@ -231,7 +368,7 @@ export function BankStatementImportPage() {
         <UploadPanel
           sourceType="CREDIT_CARD"
           title="Extrato do cartão de crédito"
-          subtitle="Fatura CSV — compras detalhadas por estabelecimento"
+          subtitle="Compras por estabelecimento — ciclo Nubank: fecha 7 dias antes do vencimento (pagamento de fatura vem do extrato da conta)"
           icon={CreditCard}
           bank={cardBank}
           onBankChange={setCardBank}
@@ -239,47 +376,32 @@ export function BankStatementImportPage() {
         />
       </div>
 
-      <Card title="Importações recentes" subtitle="Histórico de extratos enviados">
+      <Card title="Extratos importados" subtitle="Organizados por mês e tipo de conta">
         {loading ? (
           <Spinner label="Carregando histórico..." />
         ) : error ? (
           <ErrorState message={error} onRetry={reload} />
-        ) : !history?.length ? (
+        ) : !hasHistory ? (
           <EmptyState title="Nenhuma importação" message="Seus extratos importados aparecerão aqui." />
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {history.map((row) => (
-              <li key={row.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <div>
-                  <p className="font-semibold text-slate-950">
-                    {row.sourceTypeLabel ?? row.sourceType} · {row.bankLabel ?? row.bank} ·{' '}
-                    {row.fileName}
-                  </p>
-                  <p className="text-sm text-slate-500">
-                    {row.lineCount} lançamentos · meses {row.monthsCovered.join(', ')} ·{' '}
-                    {new Date(row.createdAt).toLocaleString('pt-BR')}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                    {row.format}
-                  </span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-9 px-3 text-red-700 hover:bg-red-50 hover:text-red-800"
-                    onClick={() => {
-                      setDeleting(row);
-                      setDeletePassword('');
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    Excluir
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="grid gap-8 lg:grid-cols-2">
+            <ImportHistorySection
+              title="Conta corrente"
+              subtitle="NuConta, Pix, salário e pagamentos"
+              icon={Landmark}
+              rows={accountImports}
+              emptyMessage="Nenhum extrato de conta importado ainda."
+              onDelete={openDelete}
+            />
+            <ImportHistorySection
+              title="Cartão de crédito"
+              subtitle="Compras e faturas por estabelecimento"
+              icon={CreditCard}
+              rows={cardImports}
+              emptyMessage="Nenhum extrato de cartão importado ainda."
+              onDelete={openDelete}
+            />
+          </div>
         )}
       </Card>
 

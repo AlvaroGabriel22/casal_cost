@@ -22,6 +22,8 @@ export type StatementPreview = {
   accountLabel?: string;
   lineCount: number;
   monthsCovered: string[];
+  billingCycleApplied?: boolean;
+  skippedCardPayments?: number;
   debitTotal: string;
   creditTotal: string;
   sample: Array<{
@@ -30,6 +32,7 @@ export type StatementPreview = {
     amount: string;
     direction: 'DEBIT' | 'CREDIT';
     category: string;
+    billingMonth?: string;
   }>;
 };
 
@@ -44,6 +47,40 @@ export type StatementImportResult = {
   monthsCovered: string[];
   reconciled?: number;
   message: string;
+};
+
+export type ReconciliationOverview = {
+  month: string;
+  summary: {
+    awaitingCount: number;
+    awaitingTotal: string;
+    unmatchedCount: number;
+    unmatchedTotal: string;
+    confirmedCount: number;
+  };
+  awaitingExtract: Array<{
+    occurrenceId: string;
+    title: string;
+    amount: string;
+    dueDate: string;
+    paymentMethod: string;
+    status: string;
+  }>;
+  unmatchedStatementDebits: Array<{
+    entryId: string;
+    description: string;
+    amount: string;
+    transactionDate: string;
+  }>;
+  confirmedMatches: Array<{
+    matchId: string;
+    title: string;
+    entryDescription: string;
+    amount: string;
+    matchType: 'AUTO' | 'MANUAL';
+    confidence: number;
+    paidAt: string;
+  }>;
 };
 
 export type StatementImportRecord = {
@@ -101,6 +138,14 @@ export const statementImportService = {
 
   async listImports() {
     const { data } = await api.get<ApiSuccess<StatementImportRecord[]>>('/statement-imports');
+    return data.data;
+  },
+
+  async reconciliationOverview(month: string) {
+    const { data } = await api.get<ApiSuccess<ReconciliationOverview>>(
+      '/statement-imports/reconciliation',
+      { params: { month } },
+    );
     return data.data;
   },
 

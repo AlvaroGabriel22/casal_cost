@@ -29,8 +29,16 @@ let CardsService = class CardsService {
         const name = dto.name.trim();
         const card = await this.prisma.userCard.upsert({
             where: { userId_name: { userId, name } },
-            create: { userId, name, dueDay: dto.dueDay },
-            update: { dueDay: dto.dueDay },
+            create: {
+                userId,
+                name,
+                dueDay: dto.dueDay,
+                closingDay: dto.closingDay ?? null,
+            },
+            update: {
+                dueDay: dto.dueDay,
+                ...(dto.closingDay !== undefined ? { closingDay: dto.closingDay } : {}),
+            },
         });
         await this.applyDueDayToExistingOccurrences(userId, name, dto.dueDay);
         return (0, api_response_1.ok)(card, 'Operation completed successfully');
@@ -46,6 +54,7 @@ let CardsService = class CardsService {
             data: {
                 name: dto.name?.trim() ?? existing.name,
                 dueDay: dto.dueDay ?? existing.dueDay,
+                closingDay: dto.closingDay !== undefined ? dto.closingDay : existing.closingDay,
             },
         });
         await this.applyDueDayToExistingOccurrences(userId, card.name, card.dueDay);

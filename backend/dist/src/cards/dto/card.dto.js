@@ -27,6 +27,14 @@ __decorate([
     (0, class_validator_1.Max)(31),
     __metadata("design:type", Number)
 ], UpsertCardDto.prototype, "dueDay", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(31),
+    __metadata("design:type", Number)
+], UpsertCardDto.prototype, "closingDay", void 0);
 class UpdateCardDto {
 }
 exports.UpdateCardDto = UpdateCardDto;
@@ -44,4 +52,12 @@ __decorate([
     (0, class_validator_1.Max)(31),
     __metadata("design:type", Number)
 ], UpdateCardDto.prototype, "dueDay", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_transformer_1.Type)(() => Number),
+    (0, class_validator_1.IsInt)(),
+    (0, class_validator_1.Min)(1),
+    (0, class_validator_1.Max)(31),
+    __metadata("design:type", Number)
+], UpdateCardDto.prototype, "closingDay", void 0);
 //# sourceMappingURL=card.dto.js.map

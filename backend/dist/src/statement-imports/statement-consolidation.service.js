@@ -14,6 +14,7 @@ const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const bank_movement_classifier_1 = require("../insights/bank-movement.classifier");
+const billing_cycle_1 = require("./billing-cycle");
 const category_guess_1 = require("./parsers/category-guess");
 const SPENDING_TYPES = [
     'EXPENSE',
@@ -28,6 +29,13 @@ let StatementConsolidationService = class StatementConsolidationService {
     monthStart(ym) {
         const [y, m] = ym.split('-').map(Number);
         return new Date(Date.UTC(y, m - 1, 1));
+    }
+    async resolveDueDay(userId) {
+        const card = await this.prisma.userCard.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' },
+        });
+        return card?.dueDay ?? 1;
     }
     async monthsWithCardData(userId, monthYms) {
         const where = {
@@ -47,7 +55,7 @@ let StatementConsolidationService = class StatementConsolidationService {
         });
         return new Set(rows.map((r) => `${r.referenceMonth.getUTCFullYear()}-${String(r.referenceMonth.getUTCMonth() + 1).padStart(2, '0')}`));
     }
-    isConsumptionEntry(entry, monthsWithCard, monthYm) {
+    isConsumptionEntry(entry, monthsWithCard, monthYm, dueDay) {
         if (entry.direction !== 'DEBIT')
             return false;
         const movementType = (0, bank_movement_classifier_1.classifyBankMovement)(entry.description, entry.direction);
@@ -63,6 +71,11 @@ let StatementConsolidationService = class StatementConsolidationService {
             return false;
         }
         if (entry.sourceType === client_1.StatementSourceType.CREDIT_CARD) {
+            if (entry.bank === client_1.DetectedBank.NUBANK) {
+                if (!(0, billing_cycle_1.isWithinNubankBillingPeriod)(entry.transactionDate, monthYm, dueDay)) {
+                    return false;
+                }
+            }
             return SPENDING_TYPES.includes(movementType) || movementType === 'EXPENSE';
         }
         if (entry.sourceType === client_1.StatementSourceType.BANK_ACCOUNT) {
@@ -72,11 +85,12 @@ let StatementConsolidationService = class StatementConsolidationService {
     }
     async getConfirmedConsumption(userId, monthYm) {
         const month = this.monthStart(monthYm);
-        const [entries, monthsWithCard] = await Promise.all([
+        const [entries, monthsWithCard, dueDay] = await Promise.all([
             this.prisma.bankStatementEntry.findMany({
                 where: { userId, deletedAt: null, referenceMonth: month },
             }),
             this.monthsWithCardData(userId, [monthYm]),
+            this.resolveDueDay(userId),
         ]);
         let accountDebits = 0;
         let cardDebits = 0;
@@ -91,7 +105,7 @@ let StatementConsolidationService = class StatementConsolidationService {
                 excludedCardBillTotal += amount;
                 continue;
             }
-            if (!this.isConsumptionEntry(entry, monthsWithCard, monthYm))
+            if (!this.isConsumptionEntry(entry, monthsWithCard, monthYm, dueDay))
                 continue;
             if (entry.sourceType === client_1.StatementSourceType.CREDIT_CARD) {
                 cardDebits += amount;
@@ -112,7 +126,7 @@ let StatementConsolidationService = class StatementConsolidationService {
             byCategory: [...byCategory.entries()]
                 .map(([category, amount]) => ({ category, amount: this.round(amount) }))
                 .sort((a, b) => b.amount - a.amount),
-            entryCount: entries.filter((e) => this.isConsumptionEntry(e, monthsWithCard, monthYm)).length,
+            entryCount: entries.filter((e) => this.isConsumptionEntry(e, monthsWithCard, monthYm, dueDay)).length,
         };
     }
     round(n) {

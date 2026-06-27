@@ -12,6 +12,7 @@ import type {
   IndividualStatementSource,
   IndividualDashboard,
   InstallmentGroup,
+  MonthlySalaryOverride,
   PaymentMethod,
   User,
   UserCard,
@@ -225,12 +226,16 @@ export const cardService = {
     return data.data;
   },
 
-  async upsert(name: string, dueDay: number) {
-    const { data } = await api.post<ApiSuccess<UserCard>>('/cards', { name, dueDay });
+  async upsert(name: string, dueDay: number, closingDay?: number) {
+    const { data } = await api.post<ApiSuccess<UserCard>>('/cards', {
+      name,
+      dueDay,
+      ...(closingDay !== undefined ? { closingDay } : {}),
+    });
     return data.data;
   },
 
-  async update(id: string, body: { name?: string; dueDay?: number }) {
+  async update(id: string, body: { name?: string; dueDay?: number; closingDay?: number }) {
     const { data } = await api.patch<ApiSuccess<UserCard>>(`/cards/${id}`, body);
     return data.data;
   },
@@ -256,6 +261,30 @@ export const userService = {
     const { data } = await api.patch<ApiSuccess<User['financialSettings']>>(
       '/users/me/salary',
       body,
+    );
+    return data.data;
+  },
+
+  async listSalaryOverrides(month?: string) {
+    const { data } = await api.get<ApiSuccess<MonthlySalaryOverride[]>>(
+      '/users/me/salary/overrides',
+      { params: month ? { month } : undefined },
+    );
+    return data.data;
+  },
+
+  async upsertSalaryOverride(body: { month: string; amount: number; note?: string }) {
+    const { data } = await api.patch<ApiSuccess<MonthlySalaryOverride>>(
+      '/users/me/salary/overrides',
+      body,
+    );
+    return data.data;
+  },
+
+  async deleteSalaryOverride(month: string) {
+    const { data } = await api.delete<ApiSuccess<{ month: string }>>(
+      '/users/me/salary/overrides',
+      { params: { month } },
     );
     return data.data;
   },

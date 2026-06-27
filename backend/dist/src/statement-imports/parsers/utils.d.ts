@@ -1,6 +1,7 @@
 import { DetectedBank, StatementSourceType } from '@prisma/client';
 import type { ParsedBankLine } from './types';
-export declare function buildFingerprint(userId: string, bank: DetectedBank, line: ParsedBankLine, sourceType?: StatementSourceType): string;
+export declare function buildFingerprint(userId: string, bank: DetectedBank, line: ParsedBankLine, sourceType?: StatementSourceType, duplicateIndex?: number): string;
+export declare function buildFingerprintsForImport(userId: string, bank: DetectedBank, lines: ParsedBankLine[], sourceType?: StatementSourceType): string[];
 export declare function refMonthFromDate(d: Date): Date;
 export declare function ym(d: Date): string;
 export declare function parseBrazilianAmount(raw: string): number | null;

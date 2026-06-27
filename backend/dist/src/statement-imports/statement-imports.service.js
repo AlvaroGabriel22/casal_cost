@@ -16,6 +16,7 @@ const prisma_service_1 = require("../prisma/prisma.service");
 const api_response_1 = require("../common/api-response");
 const audit_log_service_1 = require("../audit/audit-log.service");
 const auth_service_1 = require("../auth/auth.service");
+const billing_cycle_1 = require("./billing-cycle");
 const category_guess_1 = require("./parsers/category-guess");
 const statement_parser_1 = require("./parsers/statement.parser");
 const utils_1 = require("./parsers/utils");
@@ -54,7 +55,25 @@ let StatementImportsService = class StatementImportsService {
     async invalidateRagIndex(userId) {
         await this.prisma.financeIndexState.deleteMany({ where: { userId } });
     }
-    preview(userId, buffer, fileName, bankHint, sourceTypeHint) {
+    async resolveBillingConfig(userId) {
+        const card = await this.prisma.userCard.findFirst({
+            where: { userId },
+            orderBy: { updatedAt: 'desc' },
+        });
+        if (!card)
+            return null;
+        return {
+            dueDay: card.dueDay,
+            ...(card.closingDay != null ? { closingDay: card.closingDay } : {}),
+        };
+    }
+    resolveReferenceMonths(lines, sourceType, bank, billingConfig) {
+        if (sourceType === client_1.StatementSourceType.CREDIT_CARD) {
+            return (0, billing_cycle_1.assignCreditCardReferenceMonths)(lines, billingConfig, bank);
+        }
+        return lines.map((line) => (0, utils_1.refMonthFromDate)(line.transactionDate));
+    }
+    async preview(userId, buffer, fileName, bankHint, sourceTypeHint) {
         const format = this.detectFormat(fileName);
         if (!format) {
             throw new common_1.UnsupportedMediaTypeException('Formato não suportado. Envie arquivos .csv ou .ofx.');
@@ -66,13 +85,25 @@ let StatementImportsService = class StatementImportsService {
             fileName,
             format,
             bankHint,
+            sourceType,
         });
         if (parsed.lines.length === 0) {
             throw new common_1.BadRequestException('Nenhum lançamento encontrado no arquivo. Verifique se exportou o extrato completo do mês.');
         }
-        const months = [...new Set(parsed.lines.map((l) => (0, utils_1.ym)((0, utils_1.refMonthFromDate)(l.transactionDate))))];
-        const debits = parsed.lines.filter((l) => l.direction === 'DEBIT');
-        const credits = parsed.lines.filter((l) => l.direction === 'CREDIT');
+        const billingConfig = sourceType === client_1.StatementSourceType.CREDIT_CARD
+            ? await this.resolveBillingConfig(userId)
+            : null;
+        const importLines = sourceType === client_1.StatementSourceType.CREDIT_CARD
+            ? (0, billing_cycle_1.filterCreditCardImportLines)(parsed.lines, parsed.bank)
+            : parsed.lines;
+        if (importLines.length === 0) {
+            throw new common_1.BadRequestException('Nenhum lançamento utilizável no arquivo (pagamentos de fatura do cartão são ignorados — use o extrato da conta).');
+        }
+        const referenceMonths = this.resolveReferenceMonths(importLines, sourceType, parsed.bank, billingConfig);
+        const months = (0, billing_cycle_1.billingMonthsCovered)(referenceMonths);
+        const debits = importLines.filter((l) => l.direction === 'DEBIT');
+        const credits = importLines.filter((l) => l.direction === 'CREDIT');
+        const skippedPayments = parsed.lines.length - importLines.length;
         return (0, api_response_1.ok)({
             bank: parsed.bank,
             bankLabel: statement_parser_1.BANK_LABELS[parsed.bank],
@@ -81,16 +112,19 @@ let StatementImportsService = class StatementImportsService {
             format,
             fileName,
             accountLabel: parsed.accountLabel,
-            lineCount: parsed.lines.length,
-            monthsCovered: months.sort(),
+            lineCount: importLines.length,
+            monthsCovered: months,
+            billingCycleApplied: sourceType === client_1.StatementSourceType.CREDIT_CARD,
+            skippedCardPayments: skippedPayments > 0 ? skippedPayments : undefined,
             debitTotal: debits.reduce((s, l) => s + l.amount, 0).toFixed(2),
             creditTotal: credits.reduce((s, l) => s + l.amount, 0).toFixed(2),
-            sample: parsed.lines.slice(0, 8).map((line) => ({
+            sample: importLines.slice(0, 8).map((line, i) => ({
                 date: line.transactionDate.toISOString().slice(0, 10),
                 description: line.description,
                 amount: line.amount.toFixed(2),
                 direction: line.direction,
                 category: line.category ?? (0, category_guess_1.guessCategory)(line.description),
+                billingMonth: (0, utils_1.ym)(referenceMonths[i]),
             })),
         }, 'Pré-visualização gerada com sucesso.');
     }
@@ -106,13 +140,23 @@ let StatementImportsService = class StatementImportsService {
             fileName,
             format,
             bankHint,
+            sourceType,
         });
         if (parsed.lines.length === 0) {
             throw new common_1.BadRequestException('Nenhum lançamento encontrado no arquivo.');
         }
-        const monthsCovered = [
-            ...new Set(parsed.lines.map((l) => (0, utils_1.ym)((0, utils_1.refMonthFromDate)(l.transactionDate)))),
-        ].sort();
+        const billingConfig = sourceType === client_1.StatementSourceType.CREDIT_CARD
+            ? await this.resolveBillingConfig(userId)
+            : null;
+        const importLines = sourceType === client_1.StatementSourceType.CREDIT_CARD
+            ? (0, billing_cycle_1.filterCreditCardImportLines)(parsed.lines, parsed.bank)
+            : parsed.lines;
+        if (importLines.length === 0) {
+            throw new common_1.BadRequestException('Nenhum lançamento utilizável no arquivo (pagamentos de fatura do cartão são ignorados — use o extrato da conta).');
+        }
+        const referenceMonths = this.resolveReferenceMonths(importLines, sourceType, parsed.bank, billingConfig);
+        const monthsCovered = (0, billing_cycle_1.billingMonthsCovered)(referenceMonths);
+        const fingerprints = (0, utils_1.buildFingerprintsForImport)(userId, parsed.bank, importLines, sourceType);
         const result = await this.prisma.$transaction(async (tx) => {
             for (const monthYm of monthsCovered) {
                 const [y, m] = monthYm.split('-').map(Number);
@@ -126,6 +170,14 @@ let StatementImportsService = class StatementImportsService {
                     },
                 });
             }
+            await tx.bankStatementEntry.deleteMany({
+                where: {
+                    userId,
+                    bank: parsed.bank,
+                    sourceType,
+                    fingerprint: { in: fingerprints },
+                },
+            });
             const imp = await tx.bankStatementImport.create({
                 data: {
                     userId,
@@ -134,14 +186,15 @@ let StatementImportsService = class StatementImportsService {
                     format,
                     fileName,
                     accountLabel: parsed.accountLabel,
-                    lineCount: parsed.lines.length,
+                    lineCount: importLines.length,
                     monthsCovered,
                 },
             });
             let created = 0;
-            for (const line of parsed.lines) {
-                const fingerprint = (0, utils_1.buildFingerprint)(userId, parsed.bank, line, sourceType);
-                const refMonth = (0, utils_1.refMonthFromDate)(line.transactionDate);
+            for (let i = 0; i < importLines.length; i++) {
+                const line = importLines[i];
+                const fingerprint = fingerprints[i];
+                const refMonth = referenceMonths[i];
                 await tx.bankStatementEntry.create({
                     data: {
                         userId,

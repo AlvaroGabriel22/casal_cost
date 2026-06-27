@@ -3,7 +3,7 @@ import { join } from 'path';
 import { createHash } from 'crypto';
 import { DetectedBank } from '@prisma/client';
 import type { ParsedBankLine } from './types';
-import { buildFingerprint } from './utils';
+import { buildFingerprint, buildFingerprintsForImport } from './utils';
 
 describe('buildFingerprint', () => {
   const userId = 'user-1';
@@ -30,6 +30,17 @@ describe('buildFingerprint', () => {
     const fpCredit = buildFingerprint(userId, bank, credit);
     const fpDebit = buildFingerprint(userId, bank, debit);
     expect(fpCredit).not.toBe(fpDebit);
+  });
+
+  it('assigns distinct fingerprints to same-day duplicate lines', () => {
+    const line: ParsedBankLine = {
+      transactionDate: date,
+      description: 'Foztrans*Bus',
+      amount: 5,
+      direction: 'DEBIT',
+    };
+    const fps = buildFingerprintsForImport(userId, bank, [line, line, line]);
+    expect(new Set(fps).size).toBe(3);
   });
 });
 

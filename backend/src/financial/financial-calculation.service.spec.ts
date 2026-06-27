@@ -16,6 +16,7 @@ describe('FinancialCalculationService', () => {
   let service: FinancialCalculationService;
   let prisma: {
     income: { findMany: jest.Mock };
+    monthlySalaryOverride: { findUnique: jest.Mock };
     recurrenceRule: { findMany: jest.Mock };
     expenseOccurrence: { findMany: jest.Mock };
     couple: { findUnique: jest.Mock };
@@ -26,6 +27,7 @@ describe('FinancialCalculationService', () => {
   beforeEach(async () => {
     prisma = {
       income: { findMany: jest.fn() },
+      monthlySalaryOverride: { findUnique: jest.fn().mockResolvedValue(null) },
       recurrenceRule: { findMany: jest.fn() },
       expenseOccurrence: { findMany: jest.fn() },
       couple: { findUnique: jest.fn() },
@@ -140,6 +142,26 @@ describe('FinancialCalculationService', () => {
     expect(result.baseSalaryMonth.toFixed(2)).toBe('1000.00');
     expect(result.extraIncomeMonth.toFixed(2)).toBe('550.00');
     expect(result.totalIncomeMonth.toFixed(2)).toBe('1550.00');
+  });
+
+  it('calculateIncome uses monthly salary override when present', async () => {
+    prisma.monthlySalaryOverride.findUnique.mockResolvedValue({
+      amount: new Prisma.Decimal('850'),
+      note: 'Descontos',
+    });
+    prisma.income.findMany.mockResolvedValue([]);
+
+    const result = await service.calculateIncome(
+      'user-1',
+      new Date('2026-05-01'),
+      new Prisma.Decimal('1000'),
+    );
+
+    expect(result.baseSalaryMonth.toFixed(2)).toBe('850.00');
+    expect(result.defaultBaseSalary.toFixed(2)).toBe('1000.00');
+    expect(result.salaryOverridden).toBe(true);
+    expect(result.salaryOverrideNote).toBe('Descontos');
+    expect(result.totalIncomeMonth.toFixed(2)).toBe('850.00');
   });
 
   it('calculateCoupleMonth excludes cancelled occurrences from totals and categories', async () => {

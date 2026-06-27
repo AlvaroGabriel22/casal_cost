@@ -6,7 +6,7 @@ const INVEST_APPLY = /aplica(?:ç|c)(?:ã|a)o\s*(?:rdb|cdb|lci|lca|tesouro)|apli
 const INVEST_REDEEM = /resgate\s*(?:rdb|cdb|lci|lca|tesouro)|resgate\s*rdb|resgate/i;
 const INCOME = /transfer(?:ê|e)ncia\s*recebida|pix\s*receb|sal[aá]rio|dep[oó]sito|cr[eé]dito\s*de/i;
 const TRANSFER_OUT = /transfer(?:ê|e)ncia\s*enviada|pix\s*envi/i;
-const CARD_BILL = /pagamento\s*de\s*fatura|pagamento\s*fatura/i;
+const CARD_BILL = /pagamento\s*(?:de\s*)?fatura|pagamento\s*recebido/i;
 const EXPENSE = /compra\s*no\s*d[eé]bito|pagamento\s*de\s*boleto|boleto\s*efetuado|nupay|d[eé]bito\s*via/i;
 function classifyBankMovement(description, direction) {
     const d = description.normalize('NFD').replace(/\p{M}/gu, '');

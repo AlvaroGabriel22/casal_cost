@@ -10,6 +10,7 @@ exports.StatementImportsModule = void 0;
 const common_1 = require("@nestjs/common");
 const prisma_module_1 = require("../prisma/prisma.module");
 const auth_module_1 = require("../auth/auth.module");
+const audit_log_service_1 = require("../audit/audit-log.service");
 const statement_imports_controller_1 = require("./statement-imports.controller");
 const statement_imports_service_1 = require("./statement-imports.service");
 const statement_reconciliation_service_1 = require("./statement-reconciliation.service");
@@ -22,6 +23,7 @@ exports.StatementImportsModule = StatementImportsModule = __decorate([
         imports: [prisma_module_1.PrismaModule, auth_module_1.AuthModule],
         controllers: [statement_imports_controller_1.StatementImportsController],
         providers: [
+            audit_log_service_1.AuditLogService,
             statement_imports_service_1.StatementImportsService,
             statement_reconciliation_service_1.StatementReconciliationService,
             statement_consolidation_service_1.StatementConsolidationService,

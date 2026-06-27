@@ -1,4 +1,4 @@
-import { DetectedBank, PaymentMethod } from '@prisma/client';
+import { DetectedBank, PaymentMethod, StatementSourceType } from '@prisma/client';
 
 export type ParsedBankLine = {
   transactionDate: Date;
@@ -21,4 +21,5 @@ export type ParseInput = {
   fileName: string;
   format: 'CSV' | 'OFX';
   bankHint?: DetectedBank;
+  sourceType?: StatementSourceType;
 };

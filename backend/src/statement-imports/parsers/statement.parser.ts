@@ -1,7 +1,28 @@
-import { DetectedBank } from '@prisma/client';
+import { DetectedBank, StatementSourceType } from '@prisma/client';
 import { guessCategory, guessPaymentMethod } from './category-guess';
 import type { ParsedBankLine, ParseInput, ParseResult } from './types';
 import { parseBrazilianAmount, parseFlexibleDate } from './utils';
+
+/** Conta: negativo = saída; cartão Nubank: positivo = compra, negativo = pagamento da fatura. */
+export function directionFromSignedAmount(
+  signedAmount: number,
+  sourceType?: StatementSourceType,
+  isCardFile = false,
+): 'DEBIT' | 'CREDIT' {
+  const isCreditCard =
+    sourceType === StatementSourceType.CREDIT_CARD || isCardFile;
+  if (isCreditCard) {
+    return signedAmount < 0 ? 'CREDIT' : 'DEBIT';
+  }
+  return signedAmount < 0 ? 'DEBIT' : 'CREDIT';
+}
+
+function isCreditCardInput(input: ParseInput, headers: string[] = []): boolean {
+  if (input.sourceType === StatementSourceType.CREDIT_CARD) return true;
+  return /cartao|cartão|fatura|credit.?card|credit_card|credito|crédito/i.test(
+    input.fileName + headers.join(' '),
+  );
+}
 
 function ofxTag(block: string, tag: string): string | null {
   const re = new RegExp(`<${tag}>([^<\\n]+)`, 'i');
@@ -57,8 +78,12 @@ export function parseOfx(input: ParseInput): ParseResult {
     const name = ofxTag(block, 'NAME') ?? '';
     const description = [name, memo].filter(Boolean).join(' — ').trim() || 'Lançamento';
     const trnType = (ofxTag(block, 'TRNTYPE') ?? '').toUpperCase();
-    const direction =
-      trnType === 'CREDIT' || trnType === 'DEP' || signed > 0 ? 'CREDIT' : 'DEBIT';
+    const isCard = isCreditCardInput(input);
+    const direction = isCard
+      ? directionFromSignedAmount(signed, StatementSourceType.CREDIT_CARD)
+      : trnType === 'CREDIT' || trnType === 'DEP' || signed > 0
+        ? 'CREDIT'
+        : 'DEBIT';
 
     lines.push({
       transactionDate: date,
@@ -96,8 +121,10 @@ function splitCsvLine(line: string, delimiter: string): string[] {
 }
 
 function detectDelimiter(headerLine: string): string {
+  const tabs = (headerLine.match(/\t/g) ?? []).length;
   const semicolons = (headerLine.match(/;/g) ?? []).length;
   const commas = (headerLine.match(/,/g) ?? []).length;
+  if (tabs > 0 && tabs >= semicolons && tabs >= commas) return '\t';
   return semicolons > commas ? ';' : ',';
 }
 
@@ -247,8 +274,12 @@ export function parseCsv(input: ParseInput): ParseResult {
       cols.slice(1, -1).filter(Boolean).join(' ') ||
       'Lançamento';
 
-    const direction = signedAmount < 0 ? 'DEBIT' : 'CREDIT';
-    const isCard = /cartao|fatura|credit card/i.test(input.fileName + headers.join(' '));
+    const isCard = isCreditCardInput(input, headers);
+    const direction = directionFromSignedAmount(
+      signedAmount,
+      input.sourceType,
+      isCard,
+    );
 
     lines.push({
       transactionDate: date,

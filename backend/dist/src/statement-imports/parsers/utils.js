@@ -1,18 +1,34 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildFingerprint = buildFingerprint;
+exports.buildFingerprintsForImport = buildFingerprintsForImport;
 exports.refMonthFromDate = refMonthFromDate;
 exports.ym = ym;
 exports.parseBrazilianAmount = parseBrazilianAmount;
 exports.parseFlexibleDate = parseFlexibleDate;
 const crypto_1 = require("crypto");
 const client_1 = require("@prisma/client");
-function buildFingerprint(userId, bank, line, sourceType = client_1.StatementSourceType.BANK_ACCOUNT) {
+function buildFingerprint(userId, bank, line, sourceType = client_1.StatementSourceType.BANK_ACCOUNT, duplicateIndex = 0) {
     const date = line.transactionDate.toISOString().slice(0, 10);
     const key = line.externalId
         ? `${userId}|${bank}|${sourceType}|${line.externalId}|${line.direction}|${line.amount.toFixed(2)}`
-        : `${userId}|${bank}|${sourceType}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
+        : duplicateIndex > 0
+            ? `${userId}|${bank}|${sourceType}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}|#${duplicateIndex}`
+            : `${userId}|${bank}|${sourceType}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
     return (0, crypto_1.createHash)('sha256').update(key).digest('hex');
+}
+function buildFingerprintsForImport(userId, bank, lines, sourceType = client_1.StatementSourceType.BANK_ACCOUNT) {
+    const seen = new Map();
+    return lines.map((line) => {
+        if (line.externalId) {
+            return buildFingerprint(userId, bank, line, sourceType);
+        }
+        const date = line.transactionDate.toISOString().slice(0, 10);
+        const base = `${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
+        const index = seen.get(base) ?? 0;
+        seen.set(base, index + 1);
+        return buildFingerprint(userId, bank, line, sourceType, index);
+    });
 }
 function normalizeDesc(value) {
     return value

@@ -1,9 +1,11 @@
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditLogService } from '../audit/audit-log.service';
+import { FinancialCalculationService } from '../financial/financial-calculation.service';
 export declare class UsersService {
     private readonly prisma;
     private readonly audit;
-    constructor(prisma: PrismaService, audit: AuditLogService);
+    private readonly calc;
+    constructor(prisma: PrismaService, audit: AuditLogService, calc: FinancialCalculationService);
     getMe(userId: string): Promise<{
         success: true;
         data: {
@@ -52,4 +54,40 @@ export declare class UsersService {
         };
         message: string;
     }>;
+    listSalaryOverrides(userId: string, month?: string): Promise<{
+        success: true;
+        data: {
+            id: string;
+            month: string;
+            amount: string;
+            note: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+        }[];
+        message: string;
+    }>;
+    upsertSalaryOverride(userId: string, body: {
+        month: string;
+        amount: number;
+        note?: string;
+    }): Promise<{
+        success: true;
+        data: {
+            id: string;
+            month: string;
+            amount: string;
+            note: string | null;
+            createdAt: Date;
+            updatedAt: Date;
+        };
+        message: string;
+    }>;
+    deleteSalaryOverride(userId: string, month: string): Promise<{
+        success: true;
+        data: {
+            month: string;
+        };
+        message: string;
+    }>;
+    private mapSalaryOverride;
 }
