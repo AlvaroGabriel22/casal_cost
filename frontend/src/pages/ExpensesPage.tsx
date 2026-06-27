@@ -29,6 +29,25 @@ const types: Array<ExpenseType | ''> = ['', 'ONE_TIME', 'FIXED', 'RECURRING', 'I
 const methods: Array<PaymentMethod | ''> = ['', 'BOLETO', 'PIX', 'CREDIT_CARD', 'DEBIT_CARD', 'CASH', 'TRANSFER', 'OTHER'];
 const cardOptions = ['Nubank', 'Itaú', 'Bradesco', 'Santander', 'Banco do Brasil', 'Caixa', 'Inter', 'C6', 'PicPay', 'Outro'];
 
+function occurrenceForMonth(expense: Expense, month?: string) {
+  if (!expense.occurrences?.length) return undefined;
+  if (!month) return expense.occurrences[0];
+  return (
+    expense.occurrences.find((row) => row.referenceMonth.startsWith(month)) ??
+    expense.occurrences[0]
+  );
+}
+
+function sharedShareAmount(expense: Expense, occurrenceAmount: string | number) {
+  const amount = Number(occurrenceAmount);
+  if (!Number.isFinite(amount)) return null;
+  const splits = expense.sharedSplits ?? [];
+  if (splits.length === 0) return amount / 2;
+  const equalCount = splits.filter((split) => split.splitType === 'EQUAL').length;
+  if (equalCount > 0) return amount / equalCount;
+  return null;
+}
+
 export function ExpensesPage({ scope }: { scope: ExpenseScope }) {
   const [filters, setFilters] = useState<ExpenseFilters>({ month: currentMonth(), page: 1, limit: 20 });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -293,7 +312,13 @@ export function ExpensesPage({ scope }: { scope: ExpenseScope }) {
                                 disabled={item.status === 'PAID' || item.status === 'CANCELLED'}
                                 onClick={() =>
                                   mutate(
-                                    () => expenseService.pay('INDIVIDUAL', item.expenseId, item.occurrenceId),
+                                    () =>
+                                      expenseService.pay(
+                                        'INDIVIDUAL',
+                                        item.expenseId,
+                                        item.occurrenceId,
+                                        filters.month,
+                                      ),
                                     'Conta quitada.',
                                   )
                                 }
@@ -307,7 +332,7 @@ export function ExpensesPage({ scope }: { scope: ExpenseScope }) {
                                 onClick={() =>
                                   window.confirm('Cancelar esta conta do mês?') &&
                                   mutate(
-                                    () => expenseService.cancel('INDIVIDUAL', item.expenseId, item.occurrenceId),
+                                    () => expenseService.cancel('INDIVIDUAL', item.expenseId, item.occurrenceId, filters.month),
                                     'Conta cancelada.',
                                   )
                                 }
@@ -361,16 +386,35 @@ export function ExpensesPage({ scope }: { scope: ExpenseScope }) {
               </thead>
               <tbody>
                 {paginatedData.items.map((item) => {
-                  const occurrence = item.occurrences?.[0];
+                  const occurrence = occurrenceForMonth(item, filters.month);
                   const visibleStatus = occurrence?.status ?? item.status;
+                  const displayAmount = occurrence?.amount ?? item.totalAmount;
+                  const perPersonShare = sharedShareAmount(item, displayAmount);
                   return (
                     <tr key={item.id} className="border-b border-slate-100 align-top">
                       <td className="py-3 pr-4 font-semibold text-slate-950">
                         {item.title}
                         {item.description && <p className="font-normal text-slate-500">{item.description}</p>}
+                        {occurrence?.installmentNumber && occurrence?.totalInstallments && (
+                          <p className="font-normal text-slate-500">
+                            Parcela {occurrence.installmentNumber}/{occurrence.totalInstallments}
+                          </p>
+                        )}
                       </td>
                       <td className="py-3 pr-4">{item.category}</td>
-                      <td className="py-3 pr-4 font-semibold">{money(item.totalAmount)}</td>
+                      <td className="py-3 pr-4 font-semibold">
+                        {money(displayAmount)}
+                        {item.expenseType === 'INSTALLMENT' && (
+                          <p className="text-xs font-normal text-slate-500">
+                            Total do parcelamento: {money(item.totalAmount)}
+                          </p>
+                        )}
+                        {perPersonShare != null && (
+                          <p className="text-xs font-normal text-slate-500">
+                            ~{money(perPersonShare)} por pessoa
+                          </p>
+                        )}
+                      </td>
                       <td className="py-3 pr-4">{label(item.expenseType)}</td>
                       <td className="py-3 pr-4">{brDate(occurrence?.dueDate)}</td>
                       <td className="py-3 pr-4">
@@ -393,7 +437,13 @@ export function ExpensesPage({ scope }: { scope: ExpenseScope }) {
                             disabled={visibleStatus === 'PAID' || visibleStatus === 'CANCELLED'}
                             onClick={() =>
                               mutate(
-                                () => expenseService.pay(scope, item.id, occurrence?.id),
+                                () =>
+                                  expenseService.pay(
+                                    scope,
+                                    item.id,
+                                    occurrence?.id,
+                                    filters.month,
+                                  ),
                                 'Conta quitada.',
                               )
                             }
@@ -407,7 +457,13 @@ export function ExpensesPage({ scope }: { scope: ExpenseScope }) {
                             onClick={() =>
                               window.confirm('Cancelar esta conta do mês?') &&
                               mutate(
-                                () => expenseService.cancel(scope, item.id, occurrence?.id),
+                                () =>
+                                  expenseService.cancel(
+                                    scope,
+                                    item.id,
+                                    occurrence?.id,
+                                    filters.month,
+                                  ),
                                 'Conta cancelada.',
                               )
                             }

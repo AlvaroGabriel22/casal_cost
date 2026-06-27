@@ -488,12 +488,22 @@ let ExpensesService = class ExpensesService {
             where.expenseType = query.expenseType;
         if (query.paymentMethod)
             where.paymentMethod = query.paymentMethod;
-        if (query.status)
-            where.status = query.status;
         if (query.month) {
             const m0 = this.monthStartFromYm(query.month);
-            where.occurrences = { some: { referenceMonth: m0, deletedAt: null } };
+            const occurrenceFilter = {
+                referenceMonth: m0,
+                deletedAt: null,
+            };
+            if (query.status)
+                occurrenceFilter.status = query.status;
+            where.occurrences = { some: occurrenceFilter };
         }
+        else if (query.status) {
+            where.status = query.status;
+        }
+        const monthFilter = query.month
+            ? this.monthStartFromYm(query.month)
+            : undefined;
         const [items, total] = await this.prisma.$transaction([
             this.prisma.expense.findMany({
                 where,
@@ -501,7 +511,13 @@ let ExpensesService = class ExpensesService {
                 take,
                 orderBy: { createdAt: 'desc' },
                 include: {
-                    occurrences: { where: { deletedAt: null } },
+                    occurrences: {
+                        where: {
+                            deletedAt: null,
+                            ...(monthFilter ? { referenceMonth: monthFilter } : {}),
+                        },
+                        orderBy: { referenceMonth: 'asc' },
+                    },
                 },
             }),
             this.prisma.expense.count({ where }),
@@ -531,12 +547,22 @@ let ExpensesService = class ExpensesService {
             where.expenseType = query.expenseType;
         if (query.paymentMethod)
             where.paymentMethod = query.paymentMethod;
-        if (query.status)
-            where.status = query.status;
         if (query.month) {
             const m0 = this.monthStartFromYm(query.month);
-            where.occurrences = { some: { referenceMonth: m0, deletedAt: null } };
+            const occurrenceFilter = {
+                referenceMonth: m0,
+                deletedAt: null,
+            };
+            if (query.status)
+                occurrenceFilter.status = query.status;
+            where.occurrences = { some: occurrenceFilter };
         }
+        else if (query.status) {
+            where.status = query.status;
+        }
+        const monthFilter = query.month
+            ? this.monthStartFromYm(query.month)
+            : undefined;
         const [items, total] = await this.prisma.$transaction([
             this.prisma.expense.findMany({
                 where,
@@ -544,7 +570,13 @@ let ExpensesService = class ExpensesService {
                 take,
                 orderBy: { createdAt: 'desc' },
                 include: {
-                    occurrences: { where: { deletedAt: null } },
+                    occurrences: {
+                        where: {
+                            deletedAt: null,
+                            ...(monthFilter ? { referenceMonth: monthFilter } : {}),
+                        },
+                        orderBy: { referenceMonth: 'asc' },
+                    },
                     sharedSplits: true,
                     paidBy: {
                         select: { id: true, name: true, username: true },
@@ -695,6 +727,16 @@ let ExpensesService = class ExpensesService {
             if (!occurrence)
                 throw new common_1.NotFoundException('Lançamento mensal não encontrado.');
             return { id: occurrence.id };
+        }
+        const payableCount = await this.prisma.expenseOccurrence.count({
+            where: {
+                expenseId: id,
+                deletedAt: null,
+                status: { not: client_1.ExpenseStatus.CANCELLED },
+            },
+        });
+        if (payableCount > 1) {
+            throw new common_1.BadRequestException('Informe o mês ou a parcela que deseja quitar.');
         }
         return {
             expenseId: id,

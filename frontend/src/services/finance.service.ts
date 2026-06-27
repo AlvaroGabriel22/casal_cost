@@ -101,9 +101,12 @@ export const expenseService = {
     return data.data;
   },
 
-  async pay(scope: ExpenseScope, id: string, occurrenceId?: string) {
+  async pay(scope: ExpenseScope, id: string, occurrenceId?: string, referenceMonth?: string) {
     const url = scope === 'SHARED' ? `/couple/expenses/${id}/pay` : `/expenses/${id}/pay`;
-    const { data } = await api.patch<ApiSuccess<Expense>>(url, { occurrenceId });
+    const { data } = await api.patch<ApiSuccess<Expense>>(url, {
+      occurrenceId,
+      referenceMonth,
+    });
     return data.data;
   },
 
@@ -115,9 +118,12 @@ export const expenseService = {
     return data.data;
   },
 
-  async cancel(scope: ExpenseScope, id: string, occurrenceId?: string) {
+  async cancel(scope: ExpenseScope, id: string, occurrenceId?: string, referenceMonth?: string) {
     const url = scope === 'SHARED' ? `/couple/expenses/${id}/cancel` : `/expenses/${id}/cancel`;
-    const { data } = await api.patch<ApiSuccess<Expense>>(url, { occurrenceId });
+    const { data } = await api.patch<ApiSuccess<Expense>>(url, {
+      occurrenceId,
+      referenceMonth,
+    });
     return data.data;
   },
 
