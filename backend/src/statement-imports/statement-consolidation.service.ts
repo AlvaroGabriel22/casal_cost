@@ -190,7 +190,6 @@ export class StatementConsolidationService {
     monthYm: string,
   ): Promise<{ total: number; entryCount: number }> {
     const month = this.monthStart(monthYm);
-    const dueDay = await this.resolveDueDay(userId);
     const entries = await this.prisma.bankStatementEntry.findMany({
       where: {
         userId,
@@ -201,20 +200,9 @@ export class StatementConsolidationService {
       },
     });
 
-    let total = 0;
-    let entryCount = 0;
-    for (const entry of entries) {
-      if (
-        entry.bank === DetectedBank.NUBANK &&
-        !isWithinNubankBillingPeriod(entry.transactionDate, monthYm, dueDay)
-      ) {
-        continue;
-      }
-      total += Number(entry.amount);
-      entryCount += 1;
-    }
+    const total = entries.reduce((sum, entry) => sum + Number(entry.amount), 0);
 
-    return { total: this.round(total), entryCount };
+    return { total: this.round(total), entryCount: entries.length };
   }
 
   private round(n: number) {

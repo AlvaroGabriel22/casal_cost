@@ -131,7 +131,6 @@ let StatementConsolidationService = class StatementConsolidationService {
     }
     async getCardStatementOutflows(userId, monthYm) {
         const month = this.monthStart(monthYm);
-        const dueDay = await this.resolveDueDay(userId);
         const entries = await this.prisma.bankStatementEntry.findMany({
             where: {
                 userId,
@@ -141,17 +140,8 @@ let StatementConsolidationService = class StatementConsolidationService {
                 direction: 'DEBIT',
             },
         });
-        let total = 0;
-        let entryCount = 0;
-        for (const entry of entries) {
-            if (entry.bank === client_1.DetectedBank.NUBANK &&
-                !(0, billing_cycle_1.isWithinNubankBillingPeriod)(entry.transactionDate, monthYm, dueDay)) {
-                continue;
-            }
-            total += Number(entry.amount);
-            entryCount += 1;
-        }
-        return { total: this.round(total), entryCount };
+        const total = entries.reduce((sum, entry) => sum + Number(entry.amount), 0);
+        return { total: this.round(total), entryCount: entries.length };
     }
     round(n) {
         return Math.round(n * 100) / 100;
