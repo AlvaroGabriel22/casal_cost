@@ -262,7 +262,7 @@ export class FinanceRagService {
       docs.push({
         kind: 'bank_import',
         refId: line.id,
-        content: `[Extrato bancário ${line.bank}] ${this.ymd(line.transactionDate)} | ${
+        content: `[Extrato ${line.sourceType === 'CREDIT_CARD' ? 'cartão' : 'conta'} ${line.bank}] ${this.ymd(line.transactionDate)} | ${
           line.direction === 'DEBIT' ? 'saída' : 'entrada'
         }: ${this.brl(line.amount)} | ${line.description} | categoria: ${
           rule?.category ?? line.category ?? 'Outros'

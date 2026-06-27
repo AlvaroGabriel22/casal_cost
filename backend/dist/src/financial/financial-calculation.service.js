@@ -15,11 +15,13 @@ const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const permission_service_1 = require("../permission/permission.service");
 const occurrence_generation_service_1 = require("./occurrence-generation.service");
+const statement_consolidation_service_1 = require("../statement-imports/statement-consolidation.service");
 let FinancialCalculationService = class FinancialCalculationService {
-    constructor(prisma, permission, occurrences) {
+    constructor(prisma, permission, occurrences, statementConsolidation) {
         this.prisma = prisma;
         this.permission = permission;
         this.occurrences = occurrences;
+        this.statementConsolidation = statementConsolidation;
     }
     monthStart(ym) {
         const [y, m] = ym.split('-').map(Number);
@@ -172,6 +174,8 @@ let FinancialCalculationService = class FinancialCalculationService {
         });
         let totalIndividual = new client_1.Prisma.Decimal(0);
         let totalSharedResp = new client_1.Prisma.Decimal(0);
+        let pendingIndividual = new client_1.Prisma.Decimal(0);
+        let pendingSharedResp = new client_1.Prisma.Decimal(0);
         const byCat = new Map();
         for (const occ of occurrences) {
             const ex = occ.expense;
@@ -184,6 +188,9 @@ let FinancialCalculationService = class FinancialCalculationService {
                 if (st === client_1.ExpenseStatus.CANCELLED)
                     continue;
                 totalIndividual = totalIndividual.add(occ.amount);
+                if (st === client_1.ExpenseStatus.PENDING || st === client_1.ExpenseStatus.OVERDUE) {
+                    pendingIndividual = pendingIndividual.add(occ.amount);
+                }
                 byCat.set(ex.category, (byCat.get(ex.category) ?? new client_1.Prisma.Decimal(0)).add(occ.amount));
                 continue;
             }
@@ -195,11 +202,29 @@ let FinancialCalculationService = class FinancialCalculationService {
                     continue;
                 const share = await this.calculateSharedExpenseResponsibility(ex.id, occ.amount, userId);
                 totalSharedResp = totalSharedResp.add(share);
+                if (st === client_1.ExpenseStatus.PENDING || st === client_1.ExpenseStatus.OVERDUE) {
+                    pendingSharedResp = pendingSharedResp.add(share);
+                }
                 byCat.set(ex.category, (byCat.get(ex.category) ?? new client_1.Prisma.Decimal(0)).add(share));
             }
         }
         const totalExpensesMonth = totalIndividual.add(totalSharedResp);
+        const expensesPendingMonth = pendingIndividual.add(pendingSharedResp);
+        const [confirmed, reconciledCount] = await Promise.all([
+            this.statementConsolidation.getConfirmedConsumption(userId, monthYm),
+            this.prisma.statementReconciliation.count({
+                where: {
+                    userId,
+                    occurrence: { referenceMonth: month },
+                },
+            }),
+        ]);
+        const confirmedTotal = new client_1.Prisma.Decimal(confirmed.total);
+        const hasStatementData = confirmed.entryCount > 0;
         const balanceMonth = incomeBlock.totalIncomeMonth.sub(totalExpensesMonth);
+        const balanceConfirmedMonth = hasStatementData
+            ? incomeBlock.totalIncomeMonth.sub(confirmedTotal)
+            : balanceMonth;
         const status = this.getFinancialStatus(incomeBlock.totalIncomeMonth, totalExpensesMonth);
         const upcomingBills = await this.prisma.expenseOccurrence.findMany({
             where: {
@@ -276,7 +301,21 @@ let FinancialCalculationService = class FinancialCalculationService {
             totalIndividualExpensesMonth: totalIndividual.toFixed(2),
             totalSharedExpensesResponsibilityMonth: totalSharedResp.toFixed(2),
             totalExpensesMonth: totalExpensesMonth.toFixed(2),
+            expensesPendingMonth: expensesPendingMonth.toFixed(2),
+            expensesConfirmedMonth: confirmed.total.toFixed(2),
             balanceMonth: balanceMonth.toFixed(2),
+            balanceConfirmedMonth: balanceConfirmedMonth.toFixed(2),
+            hasStatementData,
+            reconciledCount,
+            statement: {
+                confirmedAccountDebits: confirmed.accountDebits.toFixed(2),
+                confirmedCardDebits: confirmed.cardDebits.toFixed(2),
+                excludedCardBillTotal: confirmed.excludedCardBillTotal.toFixed(2),
+                expensesByCategoryConfirmed: confirmed.byCategory.map((row) => ({
+                    category: row.category,
+                    amount: row.amount.toFixed(2),
+                })),
+            },
             status,
             upcomingBills: (await Promise.all(upcomingBills.map(async (o) => {
                 if (o.expense.scope === client_1.ExpenseScope.SHARED &&
@@ -365,6 +404,7 @@ let FinancialCalculationService = class FinancialCalculationService {
                     },
                 },
                 userPayments: { where: { userId } },
+                reconciliation: true,
             },
         });
         let individualTotal = new client_1.Prisma.Decimal(0);
@@ -427,6 +467,8 @@ let FinancialCalculationService = class FinancialCalculationService {
                         username: expense.owner.username,
                     }
                     : null,
+                confirmedByStatement: !!occurrence.reconciliation,
+                reconciliationMatchType: occurrence.reconciliation?.matchType ?? null,
             });
         }
         const totalAmount = individualTotal.add(sharedResponsibilityTotal);
@@ -455,6 +497,10 @@ let FinancialCalculationService = class FinancialCalculationService {
                 CAIXA: 'Caixa',
                 GENERIC: 'Banco',
             };
+            const sourceTypeLabels = {
+                BANK_ACCOUNT: 'Conta',
+                CREDIT_CARD: 'Cartão',
+            };
             for (const entry of bankEntries) {
                 if (entry.direction === 'DEBIT') {
                     bankDebitTotal = bankDebitTotal.add(entry.amount);
@@ -462,13 +508,15 @@ let FinancialCalculationService = class FinancialCalculationService {
                 else {
                     bankCreditTotal = bankCreditTotal.add(entry.amount);
                 }
+                const typeLabel = sourceTypeLabels[entry.sourceType] ?? 'Conta';
                 bankItems.push({
                     id: entry.id,
                     title: entry.description,
                     description: entry.description,
                     category: entry.category ?? 'Outros',
                     source: 'BANK_IMPORT',
-                    sourceLabel: `Extrato ${bankLabels[entry.bank] ?? entry.bank}`,
+                    sourceLabel: `Extrato ${bankLabels[entry.bank] ?? entry.bank} (${typeLabel})`,
+                    sourceType: entry.sourceType,
                     amount: entry.amount.toFixed(2),
                     transactionDate: entry.transactionDate,
                     referenceMonth: entry.referenceMonth,
@@ -479,6 +527,7 @@ let FinancialCalculationService = class FinancialCalculationService {
                 });
             }
         }
+        const confirmed = await this.statementConsolidation.getConfirmedConsumption(userId, params.monthYm);
         return {
             month: params.monthYm,
             source,
@@ -490,6 +539,9 @@ let FinancialCalculationService = class FinancialCalculationService {
             overdueTotal: overdueTotal.toFixed(2),
             bankDebitTotal: bankDebitTotal.toFixed(2),
             bankCreditTotal: bankCreditTotal.toFixed(2),
+            expensesConfirmedMonth: confirmed.total.toFixed(2),
+            confirmedAccountDebits: confirmed.accountDebits.toFixed(2),
+            confirmedCardDebits: confirmed.cardDebits.toFixed(2),
             items,
             bankItems,
         };
@@ -594,6 +646,7 @@ exports.FinancialCalculationService = FinancialCalculationService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         permission_service_1.PermissionService,
-        occurrence_generation_service_1.OccurrenceGenerationService])
+        occurrence_generation_service_1.OccurrenceGenerationService,
+        statement_consolidation_service_1.StatementConsolidationService])
 ], FinancialCalculationService);
 //# sourceMappingURL=financial-calculation.service.js.map

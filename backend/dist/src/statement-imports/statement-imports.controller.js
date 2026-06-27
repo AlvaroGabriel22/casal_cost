@@ -29,19 +29,19 @@ let StatementImportsController = class StatementImportsController {
         return this.imports.listImports(user.id);
     }
     entries(user, query) {
-        return this.imports.listEntries(user.id, query.month, query.bank);
+        return this.imports.listEntries(user.id, query.month, query.bank, query.sourceType);
     }
     preview(user, file, query) {
         if (!file?.buffer?.length) {
             throw new common_1.BadRequestException('Selecione um arquivo CSV ou OFX.');
         }
-        return this.imports.preview(user.id, file.buffer, file.originalname, query.bank);
+        return this.imports.preview(user.id, file.buffer, file.originalname, query.bank, query.sourceType);
     }
     import(user, file, query) {
         if (!file?.buffer?.length) {
             throw new common_1.BadRequestException('Selecione um arquivo CSV ou OFX.');
         }
-        return this.imports.import(user.id, file.buffer, file.originalname, query.bank);
+        return this.imports.import(user.id, file.buffer, file.originalname, query.bank, query.sourceType);
     }
     delete(user, id, dto) {
         return this.imports.deleteImport(user.id, id, dto.password);

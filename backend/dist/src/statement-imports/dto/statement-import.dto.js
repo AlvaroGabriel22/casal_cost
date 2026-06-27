@@ -24,6 +24,11 @@ __decorate([
     (0, class_validator_1.IsEnum)(client_1.DetectedBank),
     __metadata("design:type", String)
 ], StatementImportQueryDto.prototype, "bank", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(client_1.StatementSourceType),
+    __metadata("design:type", String)
+], StatementImportQueryDto.prototype, "sourceType", void 0);
 class StatementBankHintDto {
 }
 exports.StatementBankHintDto = StatementBankHintDto;
@@ -32,6 +37,11 @@ __decorate([
     (0, class_validator_1.IsEnum)(client_1.DetectedBank),
     __metadata("design:type", String)
 ], StatementBankHintDto.prototype, "bank", void 0);
+__decorate([
+    (0, class_validator_1.IsOptional)(),
+    (0, class_validator_1.IsEnum)(client_1.StatementSourceType),
+    __metadata("design:type", String)
+], StatementBankHintDto.prototype, "sourceType", void 0);
 class DeleteStatementImportDto {
 }
 exports.DeleteStatementImportDto = DeleteStatementImportDto;

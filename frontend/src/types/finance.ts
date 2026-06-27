@@ -171,7 +171,18 @@ export type IndividualDashboard = {
   totalIndividualExpensesMonth: string | number;
   totalSharedExpensesResponsibilityMonth: string | number;
   totalExpensesMonth: string | number;
+  expensesPendingMonth?: string | number;
+  expensesConfirmedMonth?: string | number;
   balanceMonth: string | number;
+  balanceConfirmedMonth?: string | number;
+  hasStatementData?: boolean;
+  reconciledCount?: number;
+  statement?: {
+    confirmedAccountDebits: string | number;
+    confirmedCardDebits: string | number;
+    excludedCardBillTotal: string | number;
+    expensesByCategoryConfirmed?: Array<{ category: string; amount: string | number }>;
+  };
   status: 'POSITIVE' | 'ATTENTION' | 'NEGATIVE';
   expensesByCategory?: Array<{ category: string; total?: string | number; amount?: string | number }>;
   upcomingBills?: Occurrence[];

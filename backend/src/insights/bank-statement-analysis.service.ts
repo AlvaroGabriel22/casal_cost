@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { BankStatementEntry, DetectedBank } from '@prisma/client';
+import { BankStatementEntry, DetectedBank, StatementSourceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   BankMovementType,
@@ -141,6 +141,7 @@ interface ClassifiedEntry {
   direction: 'DEBIT' | 'CREDIT';
   description: string;
   bank: DetectedBank;
+  sourceType: StatementSourceType;
   category: string | null;
   type: BankMovementType;
 }
@@ -203,6 +204,11 @@ export class BankStatementAnalysisService {
     if (rows.length === 0) return empty;
 
     const entries = rows.map((row) => this.classify(row));
+    const monthsWithCard = new Set(
+      entries
+        .filter((e) => e.sourceType === StatementSourceType.CREDIT_CARD)
+        .map((e) => e.month),
+    );
     const monthsCovered = [
       ...new Set(entries.map((e) => e.month)),
     ].sort();
@@ -228,6 +234,7 @@ export class BankStatementAnalysisService {
       entries,
       monthsCovered,
       contextRules,
+      monthsWithCard,
     });
 
     const movementSummary = this.composeMovementSummary({
@@ -344,6 +351,7 @@ export class BankStatementAnalysisService {
       direction,
       description: row.description,
       bank: row.bank,
+      sourceType: row.sourceType,
       category: row.category,
       type: classifyBankMovement(row.description, direction),
     };
@@ -587,6 +595,7 @@ export class BankStatementAnalysisService {
     entries: ClassifiedEntry[];
     monthsCovered: string[];
     contextRules: ContextRuleLike[];
+    monthsWithCard: Set<string>;
   }): BankSpendingAnalysis | null {
     if (!input.refBreakdown) return null;
 
@@ -595,7 +604,7 @@ export class BankStatementAnalysisService {
       (e) =>
         e.month === input.referenceMonth &&
         e.direction === 'DEBIT' &&
-        this.isConsumptionDebit(e),
+        this.isConsumptionDebit(e, input.monthsWithCard),
     );
     const monthIncome = input.entries.filter(
       (e) =>
@@ -616,7 +625,9 @@ export class BankStatementAnalysisService {
 
     const recurringKeys = new Set<string>();
     const allSpending = input.entries.filter(
-      (e) => e.direction === 'DEBIT' && this.isConsumptionDebit(e),
+      (e) =>
+        e.direction === 'DEBIT' &&
+        this.isConsumptionDebit(e, input.monthsWithCard),
     );
     const recurringGroups = this.groupRecurringExpenses(allSpending, input.contextRules);
     const recurringExpenses = recurringGroups
@@ -846,9 +857,19 @@ export class BankStatementAnalysisService {
     return `${category} — ${merchant}`;
   }
 
-  private isConsumptionDebit(e: ClassifiedEntry): boolean {
+  private isConsumptionDebit(
+    e: ClassifiedEntry,
+    monthsWithCard: Set<string>,
+  ): boolean {
     if (e.direction !== 'DEBIT') return false;
     if (e.type === 'INVESTMENT_APPLY') return false;
+    if (
+      e.sourceType === StatementSourceType.BANK_ACCOUNT &&
+      e.type === 'CARD_BILL' &&
+      monthsWithCard.has(e.month)
+    ) {
+      return false;
+    }
     if (!SPENDING_DEBIT_TYPES.includes(e.type)) return false;
     if (isInvestmentMovement(e.description)) return false;
     if (inferSpendingCategory(e.description) === 'Investimentos') return false;

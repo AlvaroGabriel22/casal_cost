@@ -19,11 +19,17 @@ const auth_service_1 = require("../auth/auth.service");
 const category_guess_1 = require("./parsers/category-guess");
 const statement_parser_1 = require("./parsers/statement.parser");
 const utils_1 = require("./parsers/utils");
+const statement_reconciliation_service_1 = require("./statement-reconciliation.service");
+const SOURCE_LABELS = {
+    BANK_ACCOUNT: 'Conta corrente',
+    CREDIT_CARD: 'Cartão de crédito',
+};
 let StatementImportsService = class StatementImportsService {
-    constructor(prisma, audit, auth) {
+    constructor(prisma, audit, auth, reconciliation) {
         this.prisma = prisma;
         this.audit = audit;
         this.auth = auth;
+        this.reconciliation = reconciliation;
     }
     detectFormat(fileName, mime) {
         const lower = fileName.toLowerCase();
@@ -37,11 +43,23 @@ let StatementImportsService = class StatementImportsService {
             return client_1.BankStatementFormat.OFX;
         return null;
     }
-    preview(userId, buffer, fileName, bankHint) {
+    resolveSourceType(fileName, requested) {
+        if (requested)
+            return requested;
+        if (/cartao|cartão|fatura|credit.?card|credit_card|credito|crédito/i.test(fileName)) {
+            return client_1.StatementSourceType.CREDIT_CARD;
+        }
+        return client_1.StatementSourceType.BANK_ACCOUNT;
+    }
+    async invalidateRagIndex(userId) {
+        await this.prisma.financeIndexState.deleteMany({ where: { userId } });
+    }
+    preview(userId, buffer, fileName, bankHint, sourceTypeHint) {
         const format = this.detectFormat(fileName);
         if (!format) {
             throw new common_1.UnsupportedMediaTypeException('Formato não suportado. Envie arquivos .csv ou .ofx.');
         }
+        const sourceType = this.resolveSourceType(fileName, sourceTypeHint);
         const content = buffer.toString('utf-8');
         const parsed = (0, statement_parser_1.parseStatementFile)({
             content,
@@ -58,6 +76,8 @@ let StatementImportsService = class StatementImportsService {
         return (0, api_response_1.ok)({
             bank: parsed.bank,
             bankLabel: statement_parser_1.BANK_LABELS[parsed.bank],
+            sourceType,
+            sourceTypeLabel: SOURCE_LABELS[sourceType],
             format,
             fileName,
             accountLabel: parsed.accountLabel,
@@ -74,11 +94,12 @@ let StatementImportsService = class StatementImportsService {
             })),
         }, 'Pré-visualização gerada com sucesso.');
     }
-    async import(userId, buffer, fileName, bankHint) {
+    async import(userId, buffer, fileName, bankHint, sourceTypeHint) {
         const format = this.detectFormat(fileName);
         if (!format) {
             throw new common_1.UnsupportedMediaTypeException('Formato não suportado. Envie arquivos .csv ou .ofx.');
         }
+        const sourceType = this.resolveSourceType(fileName, sourceTypeHint);
         const content = buffer.toString('utf-8');
         const parsed = (0, statement_parser_1.parseStatementFile)({
             content,
@@ -100,6 +121,7 @@ let StatementImportsService = class StatementImportsService {
                     where: {
                         userId,
                         bank: parsed.bank,
+                        sourceType,
                         referenceMonth: ref,
                     },
                 });
@@ -108,6 +130,7 @@ let StatementImportsService = class StatementImportsService {
                 data: {
                     userId,
                     bank: parsed.bank,
+                    sourceType,
                     format,
                     fileName,
                     accountLabel: parsed.accountLabel,
@@ -117,7 +140,7 @@ let StatementImportsService = class StatementImportsService {
             });
             let created = 0;
             for (const line of parsed.lines) {
-                const fingerprint = (0, utils_1.buildFingerprint)(userId, parsed.bank, line);
+                const fingerprint = (0, utils_1.buildFingerprint)(userId, parsed.bank, line, sourceType);
                 const refMonth = (0, utils_1.refMonthFromDate)(line.transactionDate);
                 await tx.bankStatementEntry.create({
                     data: {
@@ -125,6 +148,7 @@ let StatementImportsService = class StatementImportsService {
                         importId: imp.id,
                         fingerprint,
                         bank: parsed.bank,
+                        sourceType,
                         transactionDate: line.transactionDate,
                         referenceMonth: refMonth,
                         description: line.description,
@@ -134,14 +158,19 @@ let StatementImportsService = class StatementImportsService {
                             : client_1.BankTransactionDirection.DEBIT,
                         category: line.category ?? (0, category_guess_1.guessCategory)(line.description),
                         paymentMethod: line.paymentMethod ??
-                            (0, category_guess_1.guessPaymentMethod)(line.description, parsed.bank),
+                            (0, category_guess_1.guessPaymentMethod)(line.description, parsed.bank, sourceType === client_1.StatementSourceType.CREDIT_CARD),
                         externalId: line.externalId,
                     },
                 });
                 created += 1;
             }
-            return { importId: imp.id, created, monthsCovered };
+            return { importId: imp.id, created, monthsCovered, sourceType };
         });
+        let reconciliationResult = { matched: 0, skipped: 0 };
+        if (sourceType === client_1.StatementSourceType.BANK_ACCOUNT) {
+            reconciliationResult = await this.reconciliation.reconcileAfterAccountImport(userId, result.monthsCovered);
+        }
+        await this.invalidateRagIndex(userId);
         await this.audit.log({
             userId,
             entity: 'BankStatementImport',
@@ -150,18 +179,26 @@ let StatementImportsService = class StatementImportsService {
             newValue: {
                 fileName,
                 bank: parsed.bank,
+                sourceType,
                 lineCount: parsed.lines.length,
                 monthsCovered: result.monthsCovered,
+                reconciled: reconciliationResult.matched,
             },
         });
+        const typeLabel = SOURCE_LABELS[sourceType];
         return (0, api_response_1.ok)({
             importId: result.importId,
             bank: parsed.bank,
             bankLabel: statement_parser_1.BANK_LABELS[parsed.bank],
+            sourceType,
+            sourceTypeLabel: typeLabel,
             fileName,
             imported: result.created,
             monthsCovered: result.monthsCovered,
-            message: 'Extrato importado. Os meses do arquivo substituíram os lançamentos anteriores desse banco.',
+            reconciled: reconciliationResult.matched,
+            message: sourceType === client_1.StatementSourceType.BANK_ACCOUNT
+                ? `Extrato de ${typeLabel} importado. ${reconciliationResult.matched} conta(s) quitada(s) automaticamente pelo extrato.`
+                : `Extrato de ${typeLabel} importado. Compras detalhadas disponíveis para análise.`,
         }, 'Extrato importado com sucesso.');
     }
     async deleteImport(userId, importId, password) {
@@ -172,6 +209,7 @@ let StatementImportsService = class StatementImportsService {
         if (!imp) {
             throw new common_1.NotFoundException('Importação não encontrada.');
         }
+        const reverted = await this.reconciliation.revertForImport(userId, imp.id);
         const deletedEntries = await this.prisma.$transaction(async (tx) => {
             const removed = await tx.bankStatementEntry.deleteMany({
                 where: { importId: imp.id, userId },
@@ -179,6 +217,7 @@ let StatementImportsService = class StatementImportsService {
             await tx.bankStatementImport.delete({ where: { id: imp.id } });
             return removed.count;
         });
+        await this.invalidateRagIndex(userId);
         await this.audit.log({
             userId,
             entity: 'BankStatementImport',
@@ -187,9 +226,11 @@ let StatementImportsService = class StatementImportsService {
             oldValue: {
                 fileName: imp.fileName,
                 bank: imp.bank,
+                sourceType: imp.sourceType,
                 lineCount: imp.lineCount,
                 monthsCovered: imp.monthsCovered,
                 entriesRemoved: deletedEntries,
+                reconciliationsReverted: reverted,
             },
         });
         return (0, api_response_1.ok)({
@@ -197,8 +238,11 @@ let StatementImportsService = class StatementImportsService {
             fileName: imp.fileName,
             bank: imp.bank,
             bankLabel: statement_parser_1.BANK_LABELS[imp.bank],
+            sourceType: imp.sourceType,
+            sourceTypeLabel: SOURCE_LABELS[imp.sourceType],
             monthsCovered: imp.monthsCovered,
             entriesRemoved: deletedEntries,
+            reconciliationsReverted: reverted,
             message: 'Extrato excluído. Os lançamentos importados foram removidos.',
         }, 'Extrato excluído com sucesso.');
     }
@@ -211,9 +255,10 @@ let StatementImportsService = class StatementImportsService {
         return (0, api_response_1.ok)(rows.map((row) => ({
             ...row,
             bankLabel: statement_parser_1.BANK_LABELS[row.bank],
+            sourceTypeLabel: SOURCE_LABELS[row.sourceType],
         })), 'Operation completed successfully');
     }
-    async listEntries(userId, month, bank) {
+    async listEntries(userId, month, bank, sourceType) {
         const where = {
             userId,
             deletedAt: null,
@@ -224,6 +269,8 @@ let StatementImportsService = class StatementImportsService {
         }
         if (bank)
             where.bank = bank;
+        if (sourceType)
+            where.sourceType = sourceType;
         const rows = await this.prisma.bankStatementEntry.findMany({
             where,
             orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }],
@@ -233,6 +280,7 @@ let StatementImportsService = class StatementImportsService {
             ...row,
             amount: row.amount.toFixed(2),
             bankLabel: statement_parser_1.BANK_LABELS[row.bank],
+            sourceTypeLabel: SOURCE_LABELS[row.sourceType],
         })), 'Operation completed successfully');
     }
 };
@@ -241,6 +289,7 @@ exports.StatementImportsService = StatementImportsService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [prisma_service_1.PrismaService,
         audit_log_service_1.AuditLogService,
-        auth_service_1.AuthService])
+        auth_service_1.AuthService,
+        statement_reconciliation_service_1.StatementReconciliationService])
 ], StatementImportsService);
 //# sourceMappingURL=statement-imports.service.js.map

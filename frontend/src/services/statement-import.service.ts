@@ -10,9 +10,13 @@ export type DetectedBank =
   | 'CAIXA'
   | 'GENERIC';
 
+export type StatementSourceType = 'BANK_ACCOUNT' | 'CREDIT_CARD';
+
 export type StatementPreview = {
   bank: DetectedBank;
   bankLabel: string;
+  sourceType: StatementSourceType;
+  sourceTypeLabel: string;
   format: 'CSV' | 'OFX';
   fileName: string;
   accountLabel?: string;
@@ -33,9 +37,12 @@ export type StatementImportResult = {
   importId: string;
   bank: DetectedBank;
   bankLabel: string;
+  sourceType: StatementSourceType;
+  sourceTypeLabel: string;
   fileName: string;
   imported: number;
   monthsCovered: string[];
+  reconciled?: number;
   message: string;
 };
 
@@ -43,6 +50,8 @@ export type StatementImportRecord = {
   id: string;
   bank: DetectedBank;
   bankLabel?: string;
+  sourceType: StatementSourceType;
+  sourceTypeLabel?: string;
   format: 'CSV' | 'OFX';
   fileName: string;
   lineCount: number;
@@ -62,24 +71,31 @@ export const BANK_OPTIONS: Array<{ value: DetectedBank | ''; label: string }> = 
   { value: 'GENERIC', label: 'Outro banco' },
 ];
 
-function uploadFile(path: string, file: File, bank?: DetectedBank) {
+function uploadFile(
+  path: string,
+  file: File,
+  bank?: DetectedBank,
+  sourceType?: StatementSourceType,
+) {
   const form = new FormData();
   form.append('file', file);
-  const params = bank ? { bank } : undefined;
+  const params: Record<string, string> = {};
+  if (bank) params.bank = bank;
+  if (sourceType) params.sourceType = sourceType;
   return api.post<ApiSuccess<StatementPreview | StatementImportResult>>(path, form, {
-    params,
+    params: Object.keys(params).length ? params : undefined,
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 }
 
 export const statementImportService = {
-  async preview(file: File, bank?: DetectedBank) {
-    const { data } = await uploadFile('/statement-imports/preview', file, bank);
+  async preview(file: File, bank?: DetectedBank, sourceType?: StatementSourceType) {
+    const { data } = await uploadFile('/statement-imports/preview', file, bank, sourceType);
     return data.data as StatementPreview;
   },
 
-  async import(file: File, bank?: DetectedBank) {
-    const { data } = await uploadFile('/statement-imports', file, bank);
+  async import(file: File, bank?: DetectedBank, sourceType?: StatementSourceType) {
+    const { data } = await uploadFile('/statement-imports', file, bank, sourceType);
     return data.data as StatementImportResult;
   },
 
@@ -94,6 +110,7 @@ export const statementImportService = {
       fileName: string;
       entriesRemoved: number;
       monthsCovered: string[];
+      reconciliationsReverted?: number;
       message: string;
     }>>(`/statement-imports/${importId}`, { data: { password } });
     return data.data;

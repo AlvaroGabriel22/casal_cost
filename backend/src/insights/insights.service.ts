@@ -339,6 +339,7 @@ export class InsightsService {
       microExpenses,
       habits,
       currentIncome: current.income,
+      bankAnalysis,
     });
     const insights = this.challengesToInsights(challenges);
 
@@ -1606,12 +1607,84 @@ export class InsightsService {
     microExpenses: MicroExpense[];
     habits: HabitsScore;
     currentIncome: number;
+    bankAnalysis: BankStatementAnalysis;
   }): InsightChallenge[] {
     const out: InsightChallenge[] = [];
     const current = input.snapshots[input.snapshots.length - 1];
     const ind = input.investments.individual;
     const couple = input.investments.couple;
     const targetPct = input.investments.targetPercent;
+
+    const spend = input.bankAnalysis.spendingAnalysis;
+    if (spend?.spentMoreThanEarned) {
+      out.push({
+        id: 'challenge-bank-deficit',
+        kind: 'BALANCE',
+        title: 'Reduzir déficit do extrato',
+        description: spend.deficitReason,
+        tasks: spend.actions.slice(0, 3),
+        estimatedSaving: spend.overspendAmount * 12,
+        priority: 'HIGH',
+        difficulty: 'MODERADO',
+        category: 'Extrato bancário',
+        progress: {
+          current: spend.totalSpent,
+          target: spend.totalIncome,
+          unit: 'BRL',
+          label: 'Gastos vs entradas (extrato)',
+        },
+        xp: 200,
+        level: 3,
+      });
+    }
+
+    if (spend?.topCategories[0] && spend.topCategories[0].sharePercent >= 25) {
+      const top = spend.topCategories[0];
+      const cut = Math.round(top.total * 0.15);
+      out.push({
+        id: `challenge-bank-cat-${top.category}`,
+        kind: 'CATEGORY_CUT',
+        title: `Cortar 15% em ${top.category}`,
+        description: `${this.brl(top.total)} no extrato (${top.sharePercent.toFixed(0)}% dos gastos).`,
+        tasks: [
+          spend.actions[0] ?? `Revise lançamentos em ${top.category}.`,
+          `Meta: economizar ${this.brl(cut)} neste mês.`,
+        ],
+        estimatedSaving: cut * 12,
+        priority: 'HIGH',
+        difficulty: 'MODERADO',
+        category: top.category,
+        progress: { current: 0, target: cut, unit: 'BRL', label: 'Economia no extrato' },
+        xp: 160,
+        level: 2,
+      });
+    }
+
+    for (const rec of spend?.recurringExpenses.slice(0, 2) ?? []) {
+      if (rec.occurrences < 2) continue;
+      out.push({
+        id: `challenge-bank-rec-${rec.id}`,
+        kind: 'MICRO_EXPENSE',
+        title: `Revisar: ${rec.label}`,
+        description: `${rec.occurrences}x no extrato, ~${this.brl(rec.averageAmount)}/vez. Impacto anual ~${this.brl(rec.annualizedEstimate)}.`,
+        tasks: [
+          'Confirme se ainda precisa deste gasto.',
+          'Negocie desconto ou cancele se não usar.',
+        ],
+        estimatedSaving: rec.annualizedEstimate,
+        priority: rec.annualizedEstimate >= 600 ? 'HIGH' : 'MEDIUM',
+        difficulty: 'FACIL',
+        category: rec.category,
+        progress: {
+          current: 0,
+          target: rec.averageAmount,
+          unit: 'BRL',
+          label: 'Economia por mês',
+        },
+        xp: Math.min(120, Math.round(rec.annualizedEstimate / 12)),
+        level: 1,
+      });
+    }
 
     const savingsCurrent = Math.max(0, current.balance);
     const savingsTarget = Math.max(current.expenses * 0.1, 100);

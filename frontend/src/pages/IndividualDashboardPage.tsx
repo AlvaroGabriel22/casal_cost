@@ -67,16 +67,53 @@ export function IndividualDashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Saldo" value={money(data.balanceMonth)} hint={data.status} tone={statusTone} />
+        <MetricCard
+          label={data.hasStatementData ? 'Saldo confirmado' : 'Saldo'}
+          value={money(
+            data.hasStatementData
+              ? (data.balanceConfirmedMonth ?? data.balanceMonth)
+              : data.balanceMonth,
+          )}
+          hint={
+            data.hasStatementData
+              ? `Projetado ${money(data.balanceMonth)}`
+              : data.status
+          }
+          tone={statusTone}
+        />
         <MetricCard label="Receitas" value={money(data.totalIncomeMonth)} hint={`Salário ${money(data.baseSalaryMonth)}`} />
-        <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to={statementLink('INDIVIDUAL')}>
-          <MetricCard label="Despesas individuais" value={money(data.totalIndividualExpensesMonth)} />
-        </Link>
-        <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to={statementLink('SHARED')}>
-          <MetricCard label="Responsabilidade compartilhada" value={money(data.totalSharedExpensesResponsibilityMonth)} />
-        </Link>
         <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to={statementLink('ALL')}>
-          <MetricCard label="Total de despesas" value={money(data.totalExpensesMonth)} tone="navy" />
+          <MetricCard
+            label="Despesas previstas"
+            value={money(data.totalExpensesMonth)}
+            hint={
+              data.expensesPendingMonth
+                ? `Pendentes ${money(data.expensesPendingMonth)}`
+                : 'Cadastro manual'
+            }
+          />
+        </Link>
+        {data.hasStatementData ? (
+          <MetricCard
+            label="Consumo confirmado"
+            value={money(data.expensesConfirmedMonth ?? 0)}
+            hint={`Conta ${money(data.statement?.confirmedAccountDebits ?? 0)} · Cartão ${money(data.statement?.confirmedCardDebits ?? 0)}`}
+            tone="navy"
+          />
+        ) : (
+          <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to="/statement/import">
+            <MetricCard label="Extrato" value="Importar" hint="Confirme gastos reais" />
+          </Link>
+        )}
+        <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to={statementLink('SHARED')}>
+          <MetricCard label="Casal (minha parte)" value={money(data.totalSharedExpensesResponsibilityMonth)} />
+        </Link>
+        <Link className="block rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#103B73] focus:ring-offset-2" to="/statement/import">
+          <MetricCard
+            label="Quitadas no extrato"
+            value={String(data.reconciledCount ?? 0)}
+            hint="Pix/débito confirmados automaticamente"
+          />
         </Link>
         <MetricCard
           label="Investimento individual"
@@ -90,18 +127,33 @@ export function IndividualDashboardPage() {
             <Badge tone={data.status}>{data.status}</Badge>
           </div>
           <p className="mt-3 text-sm text-slate-500">
-            O status reflete a saúde financeira do mês com base em suas receitas, despesas e
-            responsabilidades compartilhadas.
+            {data.hasStatementData
+              ? 'Saldo confirmado usa consumo real dos extratos (conta + cartão). Despesas previstas vêm do cadastro manual.'
+              : 'Importe extratos de conta e cartão para confirmar gastos e quitar contas automaticamente.'}
           </p>
         </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card title="Receitas x despesas" subtitle="Comparativo do mês selecionado">
-          <IncomeExpenseBars income={data.totalIncomeMonth} expenses={data.totalExpensesMonth} />
+          <IncomeExpenseBars
+            income={data.totalIncomeMonth}
+            expenses={
+              data.hasStatementData
+                ? (data.expensesConfirmedMonth ?? data.totalExpensesMonth)
+                : data.totalExpensesMonth
+            }
+          />
         </Card>
-        <Card title="Despesas por categoria" subtitle="Distribuição das suas despesas no mês">
-          {data.expensesByCategory?.length ? (
+        <Card title="Despesas por categoria" subtitle={data.hasStatementData ? 'Previsto (cadastro) — use extrato para consumo confirmado' : 'Distribuição das suas despesas no mês'}>
+          {data.hasStatementData && data.statement?.expensesByCategoryConfirmed?.length ? (
+            <CategoryPie
+              data={data.statement.expensesByCategoryConfirmed.map((row) => ({
+                category: row.category,
+                amount: row.amount,
+              }))}
+            />
+          ) : data.expensesByCategory?.length ? (
             <CategoryPie data={data.expensesByCategory} />
           ) : (
             <IncomeExpenseBars income={0} expenses={data.totalExpensesMonth} />

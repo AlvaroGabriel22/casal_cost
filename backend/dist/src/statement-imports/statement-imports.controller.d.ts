@@ -14,10 +14,12 @@ export declare class StatementImportsController {
         success: true;
         data: {
             bankLabel: string;
+            sourceTypeLabel: string;
             id: string;
             createdAt: Date;
             userId: string;
             bank: import(".prisma/client").$Enums.DetectedBank;
+            sourceType: import(".prisma/client").$Enums.StatementSourceType;
             monthsCovered: string[];
             format: import(".prisma/client").$Enums.BankStatementFormat;
             fileName: string;
@@ -31,6 +33,7 @@ export declare class StatementImportsController {
         data: {
             amount: string;
             bankLabel: string;
+            sourceTypeLabel: string;
             id: string;
             createdAt: Date;
             updatedAt: Date;
@@ -40,11 +43,12 @@ export declare class StatementImportsController {
             deletedAt: Date | null;
             referenceMonth: Date;
             userId: string;
+            transactionDate: Date;
+            direction: import(".prisma/client").$Enums.BankTransactionDirection;
             importId: string;
             fingerprint: string;
             bank: import(".prisma/client").$Enums.DetectedBank;
-            transactionDate: Date;
-            direction: import(".prisma/client").$Enums.BankTransactionDirection;
+            sourceType: import(".prisma/client").$Enums.StatementSourceType;
             externalId: string | null;
         }[];
         message: string;
@@ -54,6 +58,8 @@ export declare class StatementImportsController {
         data: {
             bank: import(".prisma/client").$Enums.DetectedBank;
             bankLabel: string;
+            sourceType: import(".prisma/client").$Enums.StatementSourceType;
+            sourceTypeLabel: string;
             format: import(".prisma/client").$Enums.BankStatementFormat;
             fileName: string;
             accountLabel: string | undefined;
@@ -77,9 +83,12 @@ export declare class StatementImportsController {
             importId: string;
             bank: import(".prisma/client").$Enums.DetectedBank;
             bankLabel: string;
+            sourceType: import(".prisma/client").$Enums.StatementSourceType;
+            sourceTypeLabel: string;
             fileName: string;
             imported: number;
             monthsCovered: string[];
+            reconciled: number;
             message: string;
         };
         message: string;
@@ -91,8 +100,11 @@ export declare class StatementImportsController {
             fileName: string;
             bank: import(".prisma/client").$Enums.DetectedBank;
             bankLabel: string;
+            sourceType: import(".prisma/client").$Enums.StatementSourceType;
+            sourceTypeLabel: string;
             monthsCovered: string[];
             entriesRemoved: number;
+            reconciliationsReverted: number;
             message: string;
         };
         message: string;

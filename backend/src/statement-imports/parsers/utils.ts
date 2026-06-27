@@ -1,17 +1,17 @@
 import { createHash } from 'crypto';
-import { DetectedBank } from '@prisma/client';
+import { DetectedBank, StatementSourceType } from '@prisma/client';
 import type { ParsedBankLine } from './types';
 
 export function buildFingerprint(
   userId: string,
   bank: DetectedBank,
   line: ParsedBankLine,
+  sourceType: StatementSourceType = StatementSourceType.BANK_ACCOUNT,
 ): string {
   const date = line.transactionDate.toISOString().slice(0, 10);
-  // Nubank reuses the same Identificador for paired movements (e.g. credit + Pix).
   const key = line.externalId
-    ? `${userId}|${bank}|${line.externalId}|${line.direction}|${line.amount.toFixed(2)}`
-    : `${userId}|${bank}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
+    ? `${userId}|${bank}|${sourceType}|${line.externalId}|${line.direction}|${line.amount.toFixed(2)}`
+    : `${userId}|${bank}|${sourceType}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
   return createHash('sha256').update(key).digest('hex');
 }
 

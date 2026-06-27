@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.BankStatementAnalysisService = void 0;
 const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 const bank_movement_classifier_1 = require("./bank-movement.classifier");
 const category_guess_1 = require("../statement-imports/parsers/category-guess");
@@ -45,6 +46,9 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
         if (rows.length === 0)
             return empty;
         const entries = rows.map((row) => this.classify(row));
+        const monthsWithCard = new Set(entries
+            .filter((e) => e.sourceType === client_1.StatementSourceType.CREDIT_CARD)
+            .map((e) => e.month));
         const monthsCovered = [
             ...new Set(entries.map((e) => e.month)),
         ].sort();
@@ -62,6 +66,7 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
             entries,
             monthsCovered,
             contextRules,
+            monthsWithCard,
         });
         const movementSummary = this.composeMovementSummary({
             referenceMonth,
@@ -153,6 +158,7 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
             direction,
             description: row.description,
             bank: row.bank,
+            sourceType: row.sourceType,
             category: row.category,
             type: (0, bank_movement_classifier_1.classifyBankMovement)(row.description, direction),
         };
@@ -335,7 +341,7 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
         const refLabel = this.monthLabel(input.referenceMonth);
         const monthSpending = input.entries.filter((e) => e.month === input.referenceMonth &&
             e.direction === 'DEBIT' &&
-            this.isConsumptionDebit(e));
+            this.isConsumptionDebit(e, input.monthsWithCard));
         const monthIncome = input.entries.filter((e) => e.month === input.referenceMonth &&
             e.direction === 'CREDIT' &&
             e.type !== 'INVESTMENT_REDEEM');
@@ -345,7 +351,8 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
         const spentMoreThanEarned = balance < 0;
         const overspendAmount = spentMoreThanEarned ? this.round(Math.abs(balance)) : 0;
         const recurringKeys = new Set();
-        const allSpending = input.entries.filter((e) => e.direction === 'DEBIT' && this.isConsumptionDebit(e));
+        const allSpending = input.entries.filter((e) => e.direction === 'DEBIT' &&
+            this.isConsumptionDebit(e, input.monthsWithCard));
         const recurringGroups = this.groupRecurringExpenses(allSpending, input.contextRules);
         const recurringExpenses = recurringGroups
             .filter((g) => g.occurrences >= 2)
@@ -542,11 +549,16 @@ let BankStatementAnalysisService = class BankStatementAnalysisService {
             return `Investimento — ${merchant}`;
         return `${category} — ${merchant}`;
     }
-    isConsumptionDebit(e) {
+    isConsumptionDebit(e, monthsWithCard) {
         if (e.direction !== 'DEBIT')
             return false;
         if (e.type === 'INVESTMENT_APPLY')
             return false;
+        if (e.sourceType === client_1.StatementSourceType.BANK_ACCOUNT &&
+            e.type === 'CARD_BILL' &&
+            monthsWithCard.has(e.month)) {
+            return false;
+        }
         if (!SPENDING_DEBIT_TYPES.includes(e.type))
             return false;
         if ((0, category_guess_1.isInvestmentMovement)(e.description))

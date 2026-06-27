@@ -91,6 +91,25 @@ export declare class ExpensesController {
             overdueTotal: string;
             bankDebitTotal: string;
             bankCreditTotal: string;
+            items: never[];
+            bankItems: never[];
+            expensesConfirmedMonth?: undefined;
+            confirmedAccountDebits?: undefined;
+            confirmedCardDebits?: undefined;
+        } | {
+            month: string;
+            source: import("../financial/financial-calculation.service").IndividualStatementSource;
+            totalAmount: string;
+            individualTotal: string;
+            sharedResponsibilityTotal: string;
+            paidTotal: string;
+            pendingTotal: string;
+            overdueTotal: string;
+            bankDebitTotal: string;
+            bankCreditTotal: string;
+            expensesConfirmedMonth: string;
+            confirmedAccountDebits: string;
+            confirmedCardDebits: string;
             items: {
                 id: string;
                 occurrenceId: string;
@@ -116,6 +135,8 @@ export declare class ExpensesController {
                     name: string;
                     username: string;
                 } | null;
+                confirmedByStatement: boolean;
+                reconciliationMatchType: import(".prisma/client").$Enums.ReconciliationMatchType | null;
             }[];
             bankItems: {
                 id: string;
@@ -124,6 +145,7 @@ export declare class ExpensesController {
                 category: string;
                 source: "BANK_IMPORT";
                 sourceLabel: string;
+                sourceType: string;
                 amount: string;
                 transactionDate: Date;
                 referenceMonth: Date;

@@ -30,7 +30,21 @@ export declare class DashboardController {
             totalIndividualExpensesMonth: string;
             totalSharedExpensesResponsibilityMonth: string;
             totalExpensesMonth: string;
+            expensesPendingMonth: string;
+            expensesConfirmedMonth: string;
             balanceMonth: string;
+            balanceConfirmedMonth: string;
+            hasStatementData: boolean;
+            reconciledCount: number;
+            statement: {
+                confirmedAccountDebits: string;
+                confirmedCardDebits: string;
+                excludedCardBillTotal: string;
+                expensesByCategoryConfirmed: {
+                    category: string;
+                    amount: string;
+                }[];
+            };
             status: import("../financial/financial-calculation.service").FinancialStatusLabel;
             upcomingBills: {
                 id: string;

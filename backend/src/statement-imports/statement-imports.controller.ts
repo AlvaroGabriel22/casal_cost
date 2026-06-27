@@ -42,7 +42,7 @@ export class StatementImportsController {
 
   @Get('entries')
   entries(@CurrentUser() user: AuthUser, @Query() query: StatementImportQueryDto) {
-    return this.imports.listEntries(user.id, query.month, query.bank);
+    return this.imports.listEntries(user.id, query.month, query.bank, query.sourceType);
   }
 
   @Post('preview')
@@ -55,7 +55,7 @@ export class StatementImportsController {
     if (!file?.buffer?.length) {
       throw new BadRequestException('Selecione um arquivo CSV ou OFX.');
     }
-    return this.imports.preview(user.id, file.buffer, file.originalname, query.bank);
+    return this.imports.preview(user.id, file.buffer, file.originalname, query.bank, query.sourceType);
   }
 
   @Post()
@@ -68,7 +68,7 @@ export class StatementImportsController {
     if (!file?.buffer?.length) {
       throw new BadRequestException('Selecione um arquivo CSV ou OFX.');
     }
-    return this.imports.import(user.id, file.buffer, file.originalname, query.bank);
+    return this.imports.import(user.id, file.buffer, file.originalname, query.bank, query.sourceType);
   }
 
   @Delete(':id')

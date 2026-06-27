@@ -2,13 +2,15 @@ import { ExpenseStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionService } from '../permission/permission.service';
 import { OccurrenceGenerationService } from './occurrence-generation.service';
+import { StatementConsolidationService } from '../statement-imports/statement-consolidation.service';
 export type FinancialStatusLabel = 'POSITIVE' | 'ATTENTION' | 'NEGATIVE';
 export type IndividualStatementSource = 'ALL' | 'INDIVIDUAL' | 'SHARED';
 export declare class FinancialCalculationService {
     private readonly prisma;
     private readonly permission;
     private readonly occurrences;
-    constructor(prisma: PrismaService, permission: PermissionService, occurrences: OccurrenceGenerationService);
+    private readonly statementConsolidation;
+    constructor(prisma: PrismaService, permission: PermissionService, occurrences: OccurrenceGenerationService, statementConsolidation: StatementConsolidationService);
     monthStart(ym: string): Date;
     private atStartOfDay;
     private atMonthStart;
@@ -31,7 +33,21 @@ export declare class FinancialCalculationService {
         totalIndividualExpensesMonth: string;
         totalSharedExpensesResponsibilityMonth: string;
         totalExpensesMonth: string;
+        expensesPendingMonth: string;
+        expensesConfirmedMonth: string;
         balanceMonth: string;
+        balanceConfirmedMonth: string;
+        hasStatementData: boolean;
+        reconciledCount: number;
+        statement: {
+            confirmedAccountDebits: string;
+            confirmedCardDebits: string;
+            excludedCardBillTotal: string;
+            expensesByCategoryConfirmed: {
+                category: string;
+                amount: string;
+            }[];
+        };
         status: FinancialStatusLabel;
         upcomingBills: {
             id: string;
@@ -69,6 +85,25 @@ export declare class FinancialCalculationService {
         overdueTotal: string;
         bankDebitTotal: string;
         bankCreditTotal: string;
+        items: never[];
+        bankItems: never[];
+        expensesConfirmedMonth?: undefined;
+        confirmedAccountDebits?: undefined;
+        confirmedCardDebits?: undefined;
+    } | {
+        month: string;
+        source: IndividualStatementSource;
+        totalAmount: string;
+        individualTotal: string;
+        sharedResponsibilityTotal: string;
+        paidTotal: string;
+        pendingTotal: string;
+        overdueTotal: string;
+        bankDebitTotal: string;
+        bankCreditTotal: string;
+        expensesConfirmedMonth: string;
+        confirmedAccountDebits: string;
+        confirmedCardDebits: string;
         items: {
             id: string;
             occurrenceId: string;
@@ -94,6 +129,8 @@ export declare class FinancialCalculationService {
                 name: string;
                 username: string;
             } | null;
+            confirmedByStatement: boolean;
+            reconciliationMatchType: import(".prisma/client").$Enums.ReconciliationMatchType | null;
         }[];
         bankItems: {
             id: string;
@@ -102,6 +139,7 @@ export declare class FinancialCalculationService {
             category: string;
             source: "BANK_IMPORT";
             sourceLabel: string;
+            sourceType: string;
             amount: string;
             transactionDate: Date;
             referenceMonth: Date;

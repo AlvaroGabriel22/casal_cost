@@ -9,6 +9,7 @@ import {
   BankTransactionDirection,
   DetectedBank,
   Prisma,
+  StatementSourceType,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ok } from '../common/api-response';
@@ -24,6 +25,12 @@ import {
   refMonthFromDate,
   ym,
 } from './parsers/utils';
+import { StatementReconciliationService } from './statement-reconciliation.service';
+
+const SOURCE_LABELS: Record<StatementSourceType, string> = {
+  BANK_ACCOUNT: 'Conta corrente',
+  CREDIT_CARD: 'Cartão de crédito',
+};
 
 @Injectable()
 export class StatementImportsService {
@@ -31,6 +38,7 @@ export class StatementImportsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditLogService,
     private readonly auth: AuthService,
+    private readonly reconciliation: StatementReconciliationService,
   ) {}
 
   detectFormat(fileName: string, mime?: string): BankStatementFormat | null {
@@ -42,11 +50,27 @@ export class StatementImportsService {
     return null;
   }
 
+  resolveSourceType(
+    fileName: string,
+    requested?: StatementSourceType,
+  ): StatementSourceType {
+    if (requested) return requested;
+    if (/cartao|cartão|fatura|credit.?card|credit_card|credito|crédito/i.test(fileName)) {
+      return StatementSourceType.CREDIT_CARD;
+    }
+    return StatementSourceType.BANK_ACCOUNT;
+  }
+
+  private async invalidateRagIndex(userId: string) {
+    await this.prisma.financeIndexState.deleteMany({ where: { userId } });
+  }
+
   preview(
     userId: string,
     buffer: Buffer,
     fileName: string,
     bankHint?: DetectedBank,
+    sourceTypeHint?: StatementSourceType,
   ) {
     const format = this.detectFormat(fileName);
     if (!format) {
@@ -55,6 +79,7 @@ export class StatementImportsService {
       );
     }
 
+    const sourceType = this.resolveSourceType(fileName, sourceTypeHint);
     const content = buffer.toString('utf-8');
     const parsed = parseStatementFile({
       content,
@@ -77,6 +102,8 @@ export class StatementImportsService {
       {
         bank: parsed.bank,
         bankLabel: BANK_LABELS[parsed.bank],
+        sourceType,
+        sourceTypeLabel: SOURCE_LABELS[sourceType],
         format,
         fileName,
         accountLabel: parsed.accountLabel,
@@ -101,6 +128,7 @@ export class StatementImportsService {
     buffer: Buffer,
     fileName: string,
     bankHint?: DetectedBank,
+    sourceTypeHint?: StatementSourceType,
   ) {
     const format = this.detectFormat(fileName);
     if (!format) {
@@ -109,6 +137,7 @@ export class StatementImportsService {
       );
     }
 
+    const sourceType = this.resolveSourceType(fileName, sourceTypeHint);
     const content = buffer.toString('utf-8');
     const parsed = parseStatementFile({
       content,
@@ -129,12 +158,11 @@ export class StatementImportsService {
       for (const monthYm of monthsCovered) {
         const [y, m] = monthYm.split('-').map(Number);
         const ref = new Date(Date.UTC(y, m - 1, 1));
-        // Remove all entries for the month (including soft-deleted) so reimport
-        // does not hit the unique fingerprint constraint.
         await tx.bankStatementEntry.deleteMany({
           where: {
             userId,
             bank: parsed.bank,
+            sourceType,
             referenceMonth: ref,
           },
         });
@@ -144,6 +172,7 @@ export class StatementImportsService {
         data: {
           userId,
           bank: parsed.bank,
+          sourceType,
           format,
           fileName,
           accountLabel: parsed.accountLabel,
@@ -154,7 +183,7 @@ export class StatementImportsService {
 
       let created = 0;
       for (const line of parsed.lines) {
-        const fingerprint = buildFingerprint(userId, parsed.bank, line);
+        const fingerprint = buildFingerprint(userId, parsed.bank, line, sourceType);
         const refMonth = refMonthFromDate(line.transactionDate);
         await tx.bankStatementEntry.create({
           data: {
@@ -162,6 +191,7 @@ export class StatementImportsService {
             importId: imp.id,
             fingerprint,
             bank: parsed.bank,
+            sourceType,
             transactionDate: line.transactionDate,
             referenceMonth: refMonth,
             description: line.description,
@@ -173,15 +203,29 @@ export class StatementImportsService {
             category: line.category ?? guessCategory(line.description),
             paymentMethod:
               line.paymentMethod ??
-              guessPaymentMethod(line.description, parsed.bank),
+              guessPaymentMethod(
+                line.description,
+                parsed.bank,
+                sourceType === StatementSourceType.CREDIT_CARD,
+              ),
             externalId: line.externalId,
           },
         });
         created += 1;
       }
 
-      return { importId: imp.id, created, monthsCovered };
+      return { importId: imp.id, created, monthsCovered, sourceType };
     });
+
+    let reconciliationResult = { matched: 0, skipped: 0 };
+    if (sourceType === StatementSourceType.BANK_ACCOUNT) {
+      reconciliationResult = await this.reconciliation.reconcileAfterAccountImport(
+        userId,
+        result.monthsCovered,
+      );
+    }
+
+    await this.invalidateRagIndex(userId);
 
     await this.audit.log({
       userId,
@@ -191,21 +235,29 @@ export class StatementImportsService {
       newValue: {
         fileName,
         bank: parsed.bank,
+        sourceType,
         lineCount: parsed.lines.length,
         monthsCovered: result.monthsCovered,
+        reconciled: reconciliationResult.matched,
       },
     });
 
+    const typeLabel = SOURCE_LABELS[sourceType];
     return ok(
       {
         importId: result.importId,
         bank: parsed.bank,
         bankLabel: BANK_LABELS[parsed.bank],
+        sourceType,
+        sourceTypeLabel: typeLabel,
         fileName,
         imported: result.created,
         monthsCovered: result.monthsCovered,
+        reconciled: reconciliationResult.matched,
         message:
-          'Extrato importado. Os meses do arquivo substituíram os lançamentos anteriores desse banco.',
+          sourceType === StatementSourceType.BANK_ACCOUNT
+            ? `Extrato de ${typeLabel} importado. ${reconciliationResult.matched} conta(s) quitada(s) automaticamente pelo extrato.`
+            : `Extrato de ${typeLabel} importado. Compras detalhadas disponíveis para análise.`,
       },
       'Extrato importado com sucesso.',
     );
@@ -221,6 +273,8 @@ export class StatementImportsService {
       throw new NotFoundException('Importação não encontrada.');
     }
 
+    const reverted = await this.reconciliation.revertForImport(userId, imp.id);
+
     const deletedEntries = await this.prisma.$transaction(async (tx) => {
       const removed = await tx.bankStatementEntry.deleteMany({
         where: { importId: imp.id, userId },
@@ -228,6 +282,8 @@ export class StatementImportsService {
       await tx.bankStatementImport.delete({ where: { id: imp.id } });
       return removed.count;
     });
+
+    await this.invalidateRagIndex(userId);
 
     await this.audit.log({
       userId,
@@ -237,9 +293,11 @@ export class StatementImportsService {
       oldValue: {
         fileName: imp.fileName,
         bank: imp.bank,
+        sourceType: imp.sourceType,
         lineCount: imp.lineCount,
         monthsCovered: imp.monthsCovered,
         entriesRemoved: deletedEntries,
+        reconciliationsReverted: reverted,
       },
     });
 
@@ -249,8 +307,11 @@ export class StatementImportsService {
         fileName: imp.fileName,
         bank: imp.bank,
         bankLabel: BANK_LABELS[imp.bank],
+        sourceType: imp.sourceType,
+        sourceTypeLabel: SOURCE_LABELS[imp.sourceType],
         monthsCovered: imp.monthsCovered,
         entriesRemoved: deletedEntries,
+        reconciliationsReverted: reverted,
         message: 'Extrato excluído. Os lançamentos importados foram removidos.',
       },
       'Extrato excluído com sucesso.',
@@ -267,12 +328,18 @@ export class StatementImportsService {
       rows.map((row) => ({
         ...row,
         bankLabel: BANK_LABELS[row.bank],
+        sourceTypeLabel: SOURCE_LABELS[row.sourceType],
       })),
       'Operation completed successfully',
     );
   }
 
-  async listEntries(userId: string, month?: string, bank?: DetectedBank) {
+  async listEntries(
+    userId: string,
+    month?: string,
+    bank?: DetectedBank,
+    sourceType?: StatementSourceType,
+  ) {
     const where: Prisma.BankStatementEntryWhereInput = {
       userId,
       deletedAt: null,
@@ -282,6 +349,7 @@ export class StatementImportsService {
       where.referenceMonth = new Date(Date.UTC(y, m - 1, 1));
     }
     if (bank) where.bank = bank;
+    if (sourceType) where.sourceType = sourceType;
 
     const rows = await this.prisma.bankStatementEntry.findMany({
       where,
@@ -294,6 +362,7 @@ export class StatementImportsService {
         ...row,
         amount: row.amount.toFixed(2),
         bankLabel: BANK_LABELS[row.bank],
+        sourceTypeLabel: SOURCE_LABELS[row.sourceType],
       })),
       'Operation completed successfully',
     );

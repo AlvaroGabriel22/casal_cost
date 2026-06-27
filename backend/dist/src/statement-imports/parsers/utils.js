@@ -6,11 +6,12 @@ exports.ym = ym;
 exports.parseBrazilianAmount = parseBrazilianAmount;
 exports.parseFlexibleDate = parseFlexibleDate;
 const crypto_1 = require("crypto");
-function buildFingerprint(userId, bank, line) {
+const client_1 = require("@prisma/client");
+function buildFingerprint(userId, bank, line, sourceType = client_1.StatementSourceType.BANK_ACCOUNT) {
     const date = line.transactionDate.toISOString().slice(0, 10);
     const key = line.externalId
-        ? `${userId}|${bank}|${line.externalId}|${line.direction}|${line.amount.toFixed(2)}`
-        : `${userId}|${bank}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
+        ? `${userId}|${bank}|${sourceType}|${line.externalId}|${line.direction}|${line.amount.toFixed(2)}`
+        : `${userId}|${bank}|${sourceType}|${date}|${line.amount.toFixed(2)}|${normalizeDesc(line.description)}`;
     return (0, crypto_1.createHash)('sha256').update(key).digest('hex');
 }
 function normalizeDesc(value) {

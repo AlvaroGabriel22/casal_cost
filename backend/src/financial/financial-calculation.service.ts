@@ -10,6 +10,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { PermissionService } from '../permission/permission.service';
 import { OccurrenceGenerationService } from './occurrence-generation.service';
+import { StatementConsolidationService } from '../statement-imports/statement-consolidation.service';
 
 export type FinancialStatusLabel = 'POSITIVE' | 'ATTENTION' | 'NEGATIVE';
 export type IndividualStatementSource = 'ALL' | 'INDIVIDUAL' | 'SHARED';
@@ -20,6 +21,7 @@ export class FinancialCalculationService {
     private readonly prisma: PrismaService,
     private readonly permission: PermissionService,
     private readonly occurrences: OccurrenceGenerationService,
+    private readonly statementConsolidation: StatementConsolidationService,
   ) {}
 
   monthStart(ym: string): Date {
@@ -216,6 +218,8 @@ export class FinancialCalculationService {
 
     let totalIndividual = new Prisma.Decimal(0);
     let totalSharedResp = new Prisma.Decimal(0);
+    let pendingIndividual = new Prisma.Decimal(0);
+    let pendingSharedResp = new Prisma.Decimal(0);
     const byCat = new Map<string, Prisma.Decimal>();
 
     for (const occ of occurrences) {
@@ -227,6 +231,9 @@ export class FinancialCalculationService {
         const st = this.effectiveOccurrenceStatus(occ.status, occ.dueDate);
         if (st === ExpenseStatus.CANCELLED) continue;
         totalIndividual = totalIndividual.add(occ.amount);
+        if (st === ExpenseStatus.PENDING || st === ExpenseStatus.OVERDUE) {
+          pendingIndividual = pendingIndividual.add(occ.amount);
+        }
         byCat.set(
           ex.category,
           (byCat.get(ex.category) ?? new Prisma.Decimal(0)).add(occ.amount),
@@ -244,6 +251,9 @@ export class FinancialCalculationService {
           userId,
         );
         totalSharedResp = totalSharedResp.add(share);
+        if (st === ExpenseStatus.PENDING || st === ExpenseStatus.OVERDUE) {
+          pendingSharedResp = pendingSharedResp.add(share);
+        }
         byCat.set(
           ex.category,
           (byCat.get(ex.category) ?? new Prisma.Decimal(0)).add(share),
@@ -252,7 +262,24 @@ export class FinancialCalculationService {
     }
 
     const totalExpensesMonth = totalIndividual.add(totalSharedResp);
+    const expensesPendingMonth = pendingIndividual.add(pendingSharedResp);
+
+    const [confirmed, reconciledCount] = await Promise.all([
+      this.statementConsolidation.getConfirmedConsumption(userId, monthYm),
+      this.prisma.statementReconciliation.count({
+        where: {
+          userId,
+          occurrence: { referenceMonth: month },
+        },
+      }),
+    ]);
+
+    const confirmedTotal = new Prisma.Decimal(confirmed.total);
+    const hasStatementData = confirmed.entryCount > 0;
     const balanceMonth = incomeBlock.totalIncomeMonth.sub(totalExpensesMonth);
+    const balanceConfirmedMonth = hasStatementData
+      ? incomeBlock.totalIncomeMonth.sub(confirmedTotal)
+      : balanceMonth;
     const status = this.getFinancialStatus(
       incomeBlock.totalIncomeMonth,
       totalExpensesMonth,
@@ -347,7 +374,21 @@ export class FinancialCalculationService {
       totalIndividualExpensesMonth: totalIndividual.toFixed(2),
       totalSharedExpensesResponsibilityMonth: totalSharedResp.toFixed(2),
       totalExpensesMonth: totalExpensesMonth.toFixed(2),
+      expensesPendingMonth: expensesPendingMonth.toFixed(2),
+      expensesConfirmedMonth: confirmed.total.toFixed(2),
       balanceMonth: balanceMonth.toFixed(2),
+      balanceConfirmedMonth: balanceConfirmedMonth.toFixed(2),
+      hasStatementData,
+      reconciledCount,
+      statement: {
+        confirmedAccountDebits: confirmed.accountDebits.toFixed(2),
+        confirmedCardDebits: confirmed.cardDebits.toFixed(2),
+        excludedCardBillTotal: confirmed.excludedCardBillTotal.toFixed(2),
+        expensesByCategoryConfirmed: confirmed.byCategory.map((row) => ({
+          category: row.category,
+          amount: row.amount.toFixed(2),
+        })),
+      },
       status,
       upcomingBills: (
         await Promise.all(
@@ -463,6 +504,7 @@ export class FinancialCalculationService {
           },
         },
         userPayments: { where: { userId } },
+        reconciliation: true,
       },
     });
 
@@ -535,6 +577,8 @@ export class FinancialCalculationService {
               username: expense.owner.username,
             }
           : null,
+        confirmedByStatement: !!occurrence.reconciliation,
+        reconciliationMatchType: occurrence.reconciliation?.matchType ?? null,
       });
     }
 
@@ -547,6 +591,7 @@ export class FinancialCalculationService {
       category: string;
       source: 'BANK_IMPORT';
       sourceLabel: string;
+      sourceType: string;
       amount: string;
       transactionDate: Date;
       referenceMonth: Date;
@@ -582,19 +627,26 @@ export class FinancialCalculationService {
         GENERIC: 'Banco',
       };
 
+      const sourceTypeLabels: Record<string, string> = {
+        BANK_ACCOUNT: 'Conta',
+        CREDIT_CARD: 'Cartão',
+      };
+
       for (const entry of bankEntries) {
         if (entry.direction === 'DEBIT') {
           bankDebitTotal = bankDebitTotal.add(entry.amount);
         } else {
           bankCreditTotal = bankCreditTotal.add(entry.amount);
         }
+        const typeLabel = sourceTypeLabels[entry.sourceType] ?? 'Conta';
         bankItems.push({
           id: entry.id,
           title: entry.description,
           description: entry.description,
           category: entry.category ?? 'Outros',
           source: 'BANK_IMPORT',
-          sourceLabel: `Extrato ${bankLabels[entry.bank] ?? entry.bank}`,
+          sourceLabel: `Extrato ${bankLabels[entry.bank] ?? entry.bank} (${typeLabel})`,
+          sourceType: entry.sourceType,
           amount: entry.amount.toFixed(2),
           transactionDate: entry.transactionDate,
           referenceMonth: entry.referenceMonth,
@@ -605,6 +657,11 @@ export class FinancialCalculationService {
         });
       }
     }
+
+    const confirmed = await this.statementConsolidation.getConfirmedConsumption(
+      userId,
+      params.monthYm,
+    );
 
     return {
       month: params.monthYm,
@@ -617,6 +674,9 @@ export class FinancialCalculationService {
       overdueTotal: overdueTotal.toFixed(2),
       bankDebitTotal: bankDebitTotal.toFixed(2),
       bankCreditTotal: bankCreditTotal.toFixed(2),
+      expensesConfirmedMonth: confirmed.total.toFixed(2),
+      confirmedAccountDebits: confirmed.accountDebits.toFixed(2),
+      confirmedCardDebits: confirmed.cardDebits.toFixed(2),
       items,
       bankItems,
     };

@@ -95,6 +95,16 @@ enum BankTransactionDirection {
   CREDIT
 }
 
+enum StatementSourceType {
+  BANK_ACCOUNT
+  CREDIT_CARD
+}
+
+enum ReconciliationMatchType {
+  AUTO
+  MANUAL
+}
+
 model User {
   id           String    @id @default(uuid()) @db.Uuid
   name         String
@@ -126,6 +136,7 @@ model User {
   investmentContributions InvestmentContribution[]
   bankStatementImports    BankStatementImport[]
   bankStatementEntries    BankStatementEntry[]
+  statementReconciliations StatementReconciliation[]
   financeContextRules     FinanceContextRule[]
   financeContextQuestions FinanceContextQuestion[]
 }
@@ -380,6 +391,7 @@ model ExpenseOccurrence {
   user    User    @relation(fields: [userId], references: [id])
   couple  Couple? @relation(fields: [coupleId], references: [id])
   userPayments ExpenseOccurrencePayment[]
+  reconciliation StatementReconciliation?
 
   @@unique([expenseId, referenceMonth])
   @@index([referenceMonth])
@@ -440,6 +452,7 @@ model BankStatementImport {
   id            String              @id @default(uuid()) @db.Uuid
   userId        String              @db.Uuid
   bank          DetectedBank
+  sourceType    StatementSourceType @default(BANK_ACCOUNT)
   format        BankStatementFormat
   fileName      String
   accountLabel  String?
@@ -451,6 +464,7 @@ model BankStatementImport {
   entries BankStatementEntry[]
 
   @@index([userId, createdAt])
+  @@index([userId, sourceType])
 }
 
 model BankStatementEntry {
@@ -459,6 +473,7 @@ model BankStatementEntry {
   importId        String                   @db.Uuid
   fingerprint     String
   bank            DetectedBank
+  sourceType      StatementSourceType      @default(BANK_ACCOUNT)
   transactionDate DateTime                 @db.Date
   referenceMonth  DateTime                 @db.Date
   description     String
@@ -471,13 +486,31 @@ model BankStatementEntry {
   updatedAt       DateTime                 @updatedAt
   deletedAt       DateTime?
 
-  user   User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  import BankStatementImport @relation(fields: [importId], references: [id], onDelete: Cascade)
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  import         BankStatementImport      @relation(fields: [importId], references: [id], onDelete: Cascade)
+  reconciliation StatementReconciliation?
 
   @@unique([userId, fingerprint])
   @@index([userId, referenceMonth])
   @@index([userId, bank, referenceMonth])
+  @@index([userId, sourceType, referenceMonth])
   @@index([importId])
+}
+
+model StatementReconciliation {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  userId              String                  @db.Uuid
+  bankStatementEntryId String                 @unique @db.Uuid
+  expenseOccurrenceId String                  @unique @db.Uuid
+  matchType           ReconciliationMatchType @default(AUTO)
+  confidence          Int                     @default(100)
+  createdAt           DateTime                @default(now())
+
+  user       User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entry      BankStatementEntry  @relation(fields: [bankStatementEntryId], references: [id], onDelete: Cascade)
+  occurrence ExpenseOccurrence   @relation(fields: [expenseOccurrenceId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model FinanceContextRule {
